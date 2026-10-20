@@ -46,7 +46,8 @@ public partial class ShellWindow : Window
             Toggles = toggles,
             Apps = apps,
             Clipboard = clipboard,
-            CloseShell = immediate => CloseShell(immediate)
+            CloseShell = immediate => CloseShell(immediate),
+            BeginAppMenu = BeginAppMenu
         };
         _ = media.StartAsync();
         _ = toggles.StartAsync();
@@ -58,8 +59,7 @@ public partial class ShellWindow : Window
         _clock = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => UpdateClock(), Dispatcher);
         _clock.Stop();
 
-        Deactivated += (_, _) => { if (_drag == null) CloseShell(); };
-        SourceInitialized += (_, _) => WindowHelper.SetWindowBlur(new WindowInteropHelper(this).Handle, true);
+        Deactivated += (_, _) => { if (_drag == null && !_appMenuOpen) CloseShell(); };
         new WindowInteropHelper(this).EnsureHandle();
     }
 
@@ -102,9 +102,65 @@ public partial class ShellWindow : Window
         _clock.Start();
     }
 
+    // ---------- app menus over the shell ----------
+
+    bool _appMenuOpen;
+    DispatcherTimer? _menuWatch;
+
+    /// <summary>
+    /// An app (e.g. a tray icon) is about to show its own menu. Many of those menus aren't
+    /// "always on top", so they'd open behind the shell; drop the shell below them instead and
+    /// keep it open while the menu has focus.
+    /// </summary>
+    void BeginAppMenu()
+    {
+        _appMenuOpen = true;
+        Topmost = false;
+        _menuWatch ??= new DispatcherTimer(TimeSpan.FromMilliseconds(150), DispatcherPriority.Normal, (_, _) => WatchAppMenu(), Dispatcher);
+        _menuWatch.Start();
+    }
+
+    void WatchAppMenu()
+    {
+        var foreground = WmNative.GetForegroundWindow();
+        var own = new WindowInteropHelper(this).Handle;
+        if (foreground == own)
+        {
+            // Menu closed and you're back in the shell.
+            EndAppMenu();
+            return;
+        }
+        if (foreground == IntPtr.Zero || !IsRealWindow(foreground)) return; // menu still open
+
+        // The app opened a window (e.g. "Open Steam"), or you switched apps: get out of the way.
+        EndAppMenu();
+        CloseShell(immediate: true);
+    }
+
+    void EndAppMenu()
+    {
+        if (!_appMenuOpen) return;
+        _appMenuOpen = false;
+        _menuWatch?.Stop();
+        Topmost = true;
+    }
+
+    /// <summary>A normal app window, as opposed to a menu, popup, or an app's hidden helper window.</summary>
+    bool IsRealWindow(IntPtr hwnd)
+    {
+        if (_context.Shell.Tasks.GroupedWindows?.OfType<ManagedShell.WindowsTasks.ApplicationWindow>().Any(w => w.Handle == hwnd) == true)
+            return true;
+        if (!WmNative.IsWindowVisible(hwnd)) return false;
+        var style = WmNative.GetWindowLongPtr(hwnd, -16 /* GWL_STYLE */).ToInt64();
+        var exStyle = WmNative.GetWindowLongPtr(hwnd, WmNative.GWL_EXSTYLE).ToInt64();
+        const long WS_CAPTION = 0x00C00000;
+        return (style & WS_CAPTION) == WS_CAPTION && (exStyle & WmNative.WS_EX_TOOLWINDOW) == 0;
+    }
+
     public void CloseShell(bool immediate = false)
     {
         if (!IsOpen) return;
+        EndAppMenu();
         IsOpen = false;
         _clock.Stop();
         if (_editing) SetEditing(false);

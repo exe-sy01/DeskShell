@@ -12,10 +12,12 @@
     <SolidColorBrush x:Key="TileBrush" Color="#17FFFFFF" />
     <SolidColorBrush x:Key="TileHoverBrush" Color="#26FFFFFF" />
     <SolidColorBrush x:Key="TilePressedBrush" Color="#33FFFFFF" />
-    <SolidColorBrush x:Key="CardBrush" Color="#B8161A1F" />
+    <!-- Solid: with no blur behind the shell, any see-through let other windows' text show through -->
+    <SolidColorBrush x:Key="CardBrush" Color="#FF171B20" />
     <SolidColorBrush x:Key="DockBrush" Color="#D0161A1F" />
     <SolidColorBrush x:Key="EdgeBrush" Color="#26FFFFFF" />
-    <SolidColorBrush x:Key="DimBrush" Color="#85000000" />
+    <!-- Behind the shell: a light dark dim over the desktop (no blur; the blur washed everything grey) -->
+    <SolidColorBrush x:Key="DimBrush" Color="#4D000000" />
     <SolidColorBrush x:Key="FlashBrush" Color="#66E0A030" />
     <SolidColorBrush x:Key="DangerBrush" Color="#E2574C" />
 

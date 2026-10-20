@@ -16,6 +16,8 @@ public sealed class ShellContext
     public required AppIndex Apps { get; init; }
     public required ClipboardHistory Clipboard { get; init; }
     public required Action<bool> CloseShell { get; init; }
+    /// <summary>Keeps the shell open but lets an app's own menu (e.g. a tray icon's) show above it.</summary>
+    public required Action BeginAppMenu { get; init; }
 }
 
 /// <summary>Base for every shell tile. Tiles refresh when the shell opens and pause when it closes.</summary>

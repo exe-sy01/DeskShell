@@ -282,9 +282,15 @@ public sealed class TrayTile : PanelTile
         {
             icon.IconMouseDown(e.ChangedButton, pos, dbl);
         }
+        else if (e.ChangedButton == MouseButton.Right)
+        {
+            // Right-click opens the app's own menu (Quit, Settings…). Keep the shell open, but let the menu sit above it.
+            Context.BeginAppMenu();
+            icon.IconMouseUp(e.ChangedButton, pos, dbl);
+        }
         else
         {
-            // Get out of the way so the app's window or menu isn't hidden behind the shell.
+            // Left-click usually opens the app's window; get out of its way.
             CloseShell();
             icon.IconMouseUp(e.ChangedButton, pos, dbl);
         }

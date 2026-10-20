@@ -88,7 +88,7 @@
 
             <!-- Every open window, on all monitors -->
             <Border x:Name="WindowStrip" HorizontalAlignment="Center" Margin="0,14,0,0" CornerRadius="17" Padding="6"
-                    Background="{StaticResource DockBrush}" BorderBrush="{StaticResource EdgeBrush}" BorderThickness="1">
+                    Background="{StaticResource CardBrush}" BorderBrush="{StaticResource EdgeBrush}" BorderThickness="1">
                 <ItemsControl x:Name="AllWindows" ItemTemplate="{StaticResource TaskTemplate}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>

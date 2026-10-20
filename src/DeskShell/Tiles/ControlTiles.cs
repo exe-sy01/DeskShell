@@ -339,6 +339,8 @@ public sealed class WeatherTile : TileBase
 
     public WeatherTile(ShellContext c) : base(c)
     {
+        Padding = new Thickness(14, 6, 14, 6);
+        _temp.FontSize = 20;
         _glyph.HorizontalAlignment = HorizontalAlignment.Left;
         _temp.FontFamily = Res<FontFamily>("DisplayFont");
         var top = new StackPanel { Orientation = Orientation.Horizontal };
