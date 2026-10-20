@@ -54,7 +54,8 @@ public partial class ShellWindow : Window
         _ = toggles.StartAsync();
 
         _board = new WindowBoard(shell, apps);
-        WindowHost.Content = _board;
+        LeftHost.Content = _board.Left;
+        RightHost.Content = _board.Right;
         BuildTiles();
         UpdateHint();
 
@@ -162,48 +163,38 @@ public partial class ShellWindow : Window
     }
 
     /// <summary>
-    /// Keeps everything on screen: the window list gets whatever height is left under the panel
-    /// (and scrolls beyond that); if even the panel is too tall for this screen, everything shrinks.
+    /// The shell stays in the middle. On wide screens Monitor 1's windows sit in a panel to its left
+    /// and Monitor 2's to its right; otherwise one panel goes underneath. If it still doesn't fit
+    /// the screen, everything shrinks.
     /// </summary>
     void FitToScreen()
     {
-        const double sideGap = 14, sideMin = 560;
+        const double sideGap = 16, sideMin = 300, sideMax = 380;
         ShellPanel.LayoutTransform = Transform.Identity;
         // Keep clear of the dock at the bottom.
         var availableHeight = ActualHeight - App.Settings.DockHeight - 40;
         var availableWidth = ActualWidth - 80;
 
-        // Wide screens: use the whole width. The panel sits on the left and the window board fills
-        // everything to its right, at the panel's height. Narrower screens: the board goes underneath.
-        var sideWidth = availableWidth - Card.Width - sideGap;
+        var sideWidth = Math.Min(sideMax, (availableWidth - Card.Width) / 2 - sideGap);
         if (sideWidth >= sideMin)
         {
-            ShellPanel.HorizontalAlignment = HorizontalAlignment.Stretch;
-            ShellPanel.Margin = new Thickness(40, 0, 40, 0);
-            ShellPanel.ColumnDefinitions[1].Width = new GridLength(1, GridUnitType.Star);
-            Grid.SetRow(WindowHost, 0);
-            Grid.SetColumn(WindowHost, 1);
-            WindowHost.Margin = new Thickness(sideGap, 0, 0, 0);
-            WindowHost.Width = double.NaN;
-            WindowHost.VerticalAlignment = VerticalAlignment.Stretch;
-            _board.VerticalAlignment = VerticalAlignment.Stretch;
+            Grid.SetRow(LeftHost, 0);
+            Grid.SetColumn(LeftHost, 0);
+            LeftHost.Margin = new Thickness(0, 0, sideGap, 0);
+            RightHost.Margin = new Thickness(sideGap, 0, 0, 0);
+            RightHost.Visibility = Visibility.Visible;
             UpdateLayout();
-            _board.MaxListHeight = Math.Max(170, Card.ActualHeight - _board.Padding.Top - _board.Padding.Bottom - 2);
+            _board.Arrange(sides: true, sideWidth, Card.ActualHeight);
         }
         else
         {
-            ShellPanel.HorizontalAlignment = HorizontalAlignment.Center;
-            ShellPanel.Margin = new Thickness(0);
-            ShellPanel.ColumnDefinitions[1].Width = GridLength.Auto;
-            Grid.SetRow(WindowHost, 1);
-            Grid.SetColumn(WindowHost, 0);
-            WindowHost.Margin = new Thickness(0, 14, 0, 0);
-            WindowHost.Width = Card.Width;
-            WindowHost.VerticalAlignment = VerticalAlignment.Top;
-            _board.VerticalAlignment = VerticalAlignment.Top;
+            Grid.SetRow(LeftHost, 1);
+            Grid.SetColumn(LeftHost, 1);
+            LeftHost.Margin = new Thickness(0, 14, 0, 0);
+            RightHost.Visibility = Visibility.Collapsed;
             UpdateLayout();
             var hint = HintText.ActualHeight + HintText.Margin.Top;
-            _board.MaxListHeight = Math.Max(170, availableHeight - Card.ActualHeight - WindowHost.Margin.Top - hint - 24);
+            _board.Arrange(sides: false, Card.Width, availableHeight - Card.ActualHeight - LeftHost.Margin.Top - hint - 24);
         }
 
         // If it still doesn't fit (small screens), shrink everything to fit.

@@ -17,6 +17,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -24,7 +25,7 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <Border x:Name="Card" Width="1000" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource EdgeBrush}" BorderThickness="1" CornerRadius="8" Padding="24,20,24,20">
+            <Border x:Name="Card" Grid.Column="1" Width="1000" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource EdgeBrush}" BorderThickness="1" CornerRadius="8" Padding="24,20,24,20">
                 <StackPanel>
                     <!-- Time and search -->
                     <Grid Margin="0,0,0,18">
@@ -95,10 +96,11 @@
                 </StackPanel>
             </Border>
 
-            <!-- Every open window: per monitor, grouped by app, as preview cards (WindowBoard) -->
-            <ContentControl x:Name="WindowHost" Grid.Row="1" Margin="0,14,0,0" Focusable="False" />
+            <!-- Open windows (WindowBoard): Monitor 1 on the left of the shell, Monitor 2 on the right -->
+            <ContentControl x:Name="LeftHost" Grid.Column="0" Focusable="False" VerticalAlignment="Center" />
+            <ContentControl x:Name="RightHost" Grid.Column="2" Focusable="False" VerticalAlignment="Center" />
 
-            <TextBlock x:Name="HintText" Grid.Row="2" Grid.ColumnSpan="2" HorizontalAlignment="Center" Margin="0,12,0,0" Foreground="White" Opacity="0.75" FontSize="12" />
+            <TextBlock x:Name="HintText" Grid.Row="2" Grid.ColumnSpan="3" HorizontalAlignment="Center" Margin="0,12,0,0" Foreground="White" Opacity="0.75" FontSize="12" />
         </Grid>
     </Grid>
 </Window>

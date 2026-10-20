@@ -15,55 +15,83 @@ using ManagedShell.WindowsTasks;
 namespace DeskShell;
 
 /// <summary>
-/// Every open window, shown under the shell: a column per monitor (left to right), windows grouped
-/// by app inside it, and each window as a preview card with its full title. Snapshots are taken in
-/// the background when the shell opens, so opening stays instant.
+/// Every open window, beside the shell: Monitor 1's windows in a panel on the left, Monitor 2's on
+/// the right (more monitors are split between the two sides), grouped by app, each window a preview
+/// card. On narrower screens it all goes in one panel underneath the shell instead. Snapshots are
+/// taken in the background when the shell opens, so opening stays instant.
 /// </summary>
-public sealed class WindowBoard : Border
+public sealed class WindowBoard
 {
-    const double CardWidth = 200, ShotHeight = 112;
+    double CardWidth = 150, ShotHeight = 84;
 
     readonly ShellManager _shell;
     readonly AppIndex _apps;
-    readonly Grid _columns = new();
-    readonly ScrollViewer _scroll;
-
-    /// <summary>How tall the list may get before it scrolls (set by the shell to fit the screen).</summary>
-    public double MaxListHeight { set => _scroll.MaxHeight = value; }
+    readonly (Border Panel, ScrollViewer Scroll) _left, _right;
     readonly Dictionary<IntPtr, BitmapSource?> _shots = new();
     readonly Dictionary<IntPtr, Border> _shotSlots = new();
     readonly DispatcherTimer _rebuild;
     IntPtr _lastActive;
     int _captureRun;
     bool _open;
+    bool _sides = true;
+
+    /// <summary>Left-side panel (also the single panel when stacked under the shell).</summary>
+    public Border Left => _left.Panel;
+    /// <summary>Right-side panel (hidden when stacked).</summary>
+    public Border Right => _right.Panel;
 
     public WindowBoard(ShellManager shell, AppIndex apps)
     {
         _shell = shell;
         _apps = apps;
-        CornerRadius = new CornerRadius(8);
-        BorderThickness = new Thickness(1);
-        Padding = new Thickness(14, 10, 8, 10);
-        SetResourceReference(BackgroundProperty, "CardBrush");
-        SetResourceReference(BorderBrushProperty, "EdgeBrush");
-        _scroll = new ScrollViewer
-        {
-            Content = _columns,
-            MaxHeight = 330,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Padding = new Thickness(0, 0, 6, 0)
-        };
-        Child = _scroll;
+        _left = MakePanel();
+        _right = MakePanel();
 
+        var dispatcher = Application.Current.Dispatcher;
         _rebuild = new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, (_, _) =>
         {
             _rebuild!.Stop();
             if (_open) Build();
-        }, Dispatcher);
+        }, dispatcher);
         _rebuild.Stop();
         if (shell.Tasks.GroupedWindows?.SourceCollection is INotifyCollectionChanged changes)
-            changes.CollectionChanged += (_, _) => Dispatcher.InvokeAsync(() => { _rebuild.Stop(); _rebuild.Start(); });
+            changes.CollectionChanged += (_, _) => dispatcher.InvokeAsync(() => { _rebuild.Stop(); _rebuild.Start(); });
+    }
+
+    static (Border, ScrollViewer) MakePanel()
+    {
+        var scroll = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Padding = new Thickness(0, 0, 6, 0)
+        };
+        var panel = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(12, 10, 6, 6),
+            Child = scroll
+        };
+        panel.SetResourceReference(Border.BackgroundProperty, "CardBrush");
+        panel.SetResourceReference(Border.BorderBrushProperty, "EdgeBrush");
+        return (panel, scroll);
+    }
+
+    /// <summary>
+    /// Side by side with the shell (<paramref name="sides"/>), each panel <paramref name="width"/> wide,
+    /// or one panel under it. Lists scroll beyond <paramref name="maxHeight"/>.
+    /// </summary>
+    public void Arrange(bool sides, double width, double maxHeight)
+    {
+        _sides = sides;
+        (CardWidth, ShotHeight) = sides ? (150.0, 84.0) : (168.0, 94.0);
+        foreach (var (panel, scroll) in new[] { _left, _right })
+        {
+            panel.Width = width;
+            scroll.MaxHeight = Math.Max(150, maxHeight - panel.Padding.Top - panel.Padding.Bottom - 2);
+        }
+        if (_open) Build();
     }
 
     List<ApplicationWindow> Windows() =>
@@ -88,14 +116,8 @@ public sealed class WindowBoard : Border
 
     void Build()
     {
-        _columns.Children.Clear();
-        _columns.ColumnDefinitions.Clear();
         _shotSlots.Clear();
-
         var windows = Windows();
-        Visibility = windows.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-        if (windows.Count == 0) return;
-
         var screens = ZoneManager.ScreensLeftToRight();
         var byScreen = screens
             .Select((s, i) => (Screen: s, Number: i + 1, Windows: windows.Where(w => w.HMonitor == s.HMonitor).ToList()))
@@ -105,33 +127,67 @@ public sealed class WindowBoard : Border
         var main = byScreen.FindIndex(x => x.Screen.Primary);
         if (main >= 0) byScreen[main].Windows.AddRange(windows.Where(w => !placed.Contains(w)));
 
-        var shown = byScreen.Where(x => x.Windows.Count > 0).ToList();
-        for (var i = 0; i < shown.Count; i++)
+        if (_sides)
         {
-            var (screen, number, list) = shown[i];
-            _columns.ColumnDefinitions.Add(new ColumnDefinition());
-            var column = new StackPanel { Margin = new Thickness(i == 0 ? 0 : 12, 0, 0, 0) };
-            Grid.SetColumn(column, i);
-
-            var label = screens.Count > 1 ? $"Monitor {number}{(screen.Primary ? " · main" : "")}" : "Open windows";
-            column.Children.Add(Caption(label.ToUpperInvariant(), 11, dim: true, bold: true, margin: new Thickness(2, 0, 0, 8)));
-
-            // App groups flow side by side and wrap, so wide screens fill up instead of leaving gaps.
-            var groups = new WrapPanel();
-            foreach (var group in list.GroupBy(AppKey).OrderBy(g => AppName(g.First()), StringComparer.OrdinalIgnoreCase))
-                groups.Children.Add(AppGroup(group.ToList()));
-            column.Children.Add(groups);
-
-            if (i > 0)
-            {
-                var divider = new Border { Width = 1, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(-7, 0, 0, 0) };
-                divider.SetResourceReference(Border.BackgroundProperty, "EdgeBrush");
-                Grid.SetColumn(divider, i);
-                _columns.Children.Add(divider);
-            }
-            _columns.Children.Add(column);
+            // Left monitors on the left, right monitors on the right; a single monitor goes on the right.
+            var half = byScreen.Count / 2;
+            Fill(_left, byScreen.Take(half).ToList(), screens.Count);
+            Fill(_right, byScreen.Skip(half).ToList(), screens.Count);
+        }
+        else
+        {
+            Fill(_left, byScreen.Where(x => x.Windows.Count > 0).ToList(), screens.Count, columns: true);
+            _right.Panel.Visibility = Visibility.Collapsed;
         }
     }
+
+    /// <summary>Puts monitor sections into a panel: stacked (beside the shell) or as columns (under it).</summary>
+    void Fill((Border Panel, ScrollViewer Scroll) target, List<(AppBarScreen Screen, int Number, List<ApplicationWindow> Windows)> monitors,
+        int screenCount, bool columns = false)
+    {
+        if (monitors.Count == 0 || monitors.All(m => m.Windows.Count == 0) && !_sides)
+        {
+            target.Panel.Visibility = _sides ? Visibility.Hidden : Visibility.Collapsed; // hidden keeps the shell centred
+            return;
+        }
+        target.Panel.Visibility = Visibility.Visible;
+
+        var container = new Grid();
+        for (var i = 0; i < monitors.Count; i++)
+        {
+            var (screen, number, list) = monitors[i];
+            var section = new StackPanel { Margin = columns ? new Thickness(i == 0 ? 0 : 12, 0, 0, 0) : new Thickness(0, i == 0 ? 0 : 8, 0, 0) };
+            var label = screenCount > 1 ? $"Monitor {number}{(screen.Primary ? " · main" : "")}" : "Open windows";
+            section.Children.Add(Caption(label.ToUpperInvariant(), 11, dim: true, bold: true, margin: new Thickness(2, 0, 0, 8)));
+
+            if (list.Count == 0)
+            {
+                section.Children.Add(Caption("No windows", 12, dim: true, margin: new Thickness(2, 0, 0, 8)));
+            }
+            else
+            {
+                // App groups flow side by side and wrap.
+                var groups = new WrapPanel();
+                foreach (var group in list.GroupBy(AppKey).OrderBy(g => AppName(g.First()), StringComparer.OrdinalIgnoreCase))
+                    groups.Children.Add(AppGroup(group.ToList()));
+                section.Children.Add(groups);
+            }
+
+            if (columns)
+            {
+                container.ColumnDefinitions.Add(new ColumnDefinition());
+                Grid.SetColumn(section, i);
+            }
+            else
+            {
+                container.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                Grid.SetRow(section, i);
+            }
+            container.Children.Add(section);
+        }
+        target.Scroll.Content = container;
+    }
+
 
     static string AppKey(ApplicationWindow w) =>
         !string.IsNullOrEmpty(w.AppUserModelID) ? w.AppUserModelID : w.WinFileName ?? w.Title ?? "";
@@ -198,7 +254,7 @@ public sealed class WindowBoard : Border
 
         var close = new Button
         {
-            Style = (Style)FindResource("GhostButton"),
+            Style = (Style)Application.Current.FindResource("GhostButton"),
             Width = 24,
             Height = 24,
             HorizontalAlignment = HorizontalAlignment.Right,
@@ -206,9 +262,9 @@ public sealed class WindowBoard : Border
             Margin = new Thickness(0, 4, 4, 0),
             ToolTip = "Close window",
             Visibility = Visibility.Hidden,
-            Content = new TextBlock { Text = "", Style = (Style)FindResource("Icon"), FontSize = 10 }
+            Content = new TextBlock { Text = "", Style = (Style)Application.Current.FindResource("Icon"), FontSize = 10 }
         };
-        close.SetResourceReference(BackgroundProperty, "MenuBrush");
+        close.SetResourceReference(Control.BackgroundProperty, "MenuBrush");
         close.Click += (_, e) =>
         {
             e.Handled = true;
