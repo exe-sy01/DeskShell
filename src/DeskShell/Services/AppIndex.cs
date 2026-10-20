@@ -68,7 +68,7 @@ public sealed class AppIndex
     }
 
     /// <summary>Icon for an app, loaded on first use (call on the UI thread).</summary>
-    ImageSource? IconFor(string target)
+    public ImageSource? IconFor(string target)
     {
         if (_icons.TryGetValue(target, out var cached)) return cached;
         ImageSource? icon = null;
@@ -111,6 +111,13 @@ public sealed class AppIndex
     {
         if (string.IsNullOrEmpty(target)) return null;
         var entry = _entries.FirstOrDefault(e => string.Equals(e.Target, target, StringComparison.OrdinalIgnoreCase));
+        return entry == null ? null : new AppResult(entry.Name, entry.Target, IconFor(entry.Target));
+    }
+
+    /// <summary>First app whose id starts with the given text (e.g. a package family plus "!").</summary>
+    public AppResult? FindByPrefix(string prefix)
+    {
+        var entry = _entries.FirstOrDefault(e => e.Target.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
         return entry == null ? null : new AppResult(entry.Name, entry.Target, IconFor(entry.Target));
     }
 

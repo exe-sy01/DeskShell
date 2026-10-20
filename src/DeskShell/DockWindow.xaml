@@ -7,16 +7,68 @@
                      ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
                      UseLayoutRounding="True" FontFamily="{StaticResource UiFont}"
                      Foreground="{DynamicResource TextBrush}">
+    <appbar:AppBarWindow.Resources>
+        <!-- A pinned app, file or folder: icon only, with the running indicator underneath -->
+        <DataTemplate x:Key="PinTemplate">
+            <Button Click="Pin_Click" ContextMenuOpening="Pin_ContextMenuOpening" ToolTip="{Binding Name}"
+                    Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="2,0">
+                <Button.ContextMenu>
+                    <ContextMenu />
+                </Button.ContextMenu>
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="Bg" Background="Transparent" CornerRadius="4" Width="40" Height="40"
+                                    BorderThickness="1" BorderBrush="Transparent">
+                                <Grid Width="24" Height="24">
+                                    <TextBlock x:Name="Fallback" Style="{StaticResource Icon}" Text="&#xE8A5;" FontSize="18" Visibility="Collapsed" />
+                                    <Image x:Name="Img" Source="{Binding Icon}" RenderOptions.BitmapScalingMode="HighQuality" />
+                                </Grid>
+                            </Border>
+                            <Border x:Name="Indicator" Width="6" Height="3" CornerRadius="1.5" VerticalAlignment="Bottom" Margin="0,0,0,2"
+                                    Background="{DynamicResource TextDimBrush}" Visibility="Collapsed" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding Icon}" Value="{x:Null}">
+                                <Setter TargetName="Fallback" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileHoverBrush}" />
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource EdgeBrush}" />
+                            </Trigger>
+                            <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                <Setter TargetName="Indicator" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileBrush}" />
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource EdgeBrush}" />
+                                <Setter TargetName="Indicator" Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter TargetName="Indicator" Property="Width" Value="16" />
+                            </DataTrigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TilePressedBrush}" />
+                                <Setter TargetName="Img" Property="Opacity" Value="0.8" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+        </DataTemplate>
+    </appbar:AppBarWindow.Resources>
+
     <Grid>
         <Border x:Name="Pill" HorizontalAlignment="Center" VerticalAlignment="Center"
-                Height="52" CornerRadius="8" Padding="6,0"
+                Height="52" CornerRadius="8" Padding="6,0" AllowDrop="True" DragOver="Pill_DragOver" Drop="Pill_Drop"
                 Background="{DynamicResource DockBrush}" BorderBrush="{DynamicResource EdgeBrush}" BorderThickness="1">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <Button x:Name="ShellButton" Style="{StaticResource GhostButton}" Width="40" Height="40"
                         ToolTip="Open shell" Click="ShellButton_Click">
                     <TextBlock Style="{StaticResource Icon}" Text="&#xE71D;" FontSize="17" />
                 </Button>
-                <Rectangle x:Name="Divider" Width="1" Margin="6,12" Fill="{DynamicResource EdgeBrush}" />
+                <Rectangle Width="1" Margin="6,12" Fill="{DynamicResource EdgeBrush}" />
+                <ItemsControl x:Name="PinList" ItemTemplate="{StaticResource PinTemplate}"
+                              ItemsPanel="{StaticResource HorizontalPanel}" VerticalAlignment="Center" />
+                <Rectangle x:Name="PinDivider" Width="1" Margin="6,12" Fill="{DynamicResource EdgeBrush}" />
                 <ItemsControl x:Name="WindowList" ItemTemplate="{StaticResource TaskTemplate}"
                               ItemsPanel="{StaticResource HorizontalPanel}" VerticalAlignment="Center" />
             </StackPanel>

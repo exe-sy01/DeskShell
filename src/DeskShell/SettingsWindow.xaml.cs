@@ -201,6 +201,7 @@ public partial class SettingsWindow : Window
         // Tiles and pins are edited in the shell itself; keep whatever they are now.
         _draft.Tiles = App.Settings.Tiles;
         _draft.PinnedApps = App.Settings.PinnedApps;
+        _draft.DockPins = App.Settings.DockPins;
         App.Instance.ApplySettings(_draft.Clone());
         Status.Text = "Saved";
     }

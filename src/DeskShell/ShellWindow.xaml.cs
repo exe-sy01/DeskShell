@@ -289,6 +289,22 @@ public partial class ShellWindow : Window
             foreach (var host in Hosts.Where(h => h.Tile.Id == "pinned")) host.Tile.OnOpened();
         };
         menu.Items.Add(pin);
+
+        var onDock = DockPins.Contains("app", app.Target);
+        var dockPin = new MenuItem { Header = onDock ? "Unpin from dock" : "Pin to dock" };
+        dockPin.Click += (_, _) =>
+        {
+            if (onDock)
+            {
+                if (DockPins.Items.FirstOrDefault(i => i.Pin.Kind == "app" && string.Equals(i.Pin.Target, app.Target, StringComparison.OrdinalIgnoreCase)) is { } item)
+                    DockPins.Remove(item);
+            }
+            else
+            {
+                DockPins.Add(new DockPin { Kind = "app", Target = app.Target, Name = app.Name });
+            }
+        };
+        menu.Items.Add(dockPin);
     }
 
     static AppResult? ItemUnder(object source)

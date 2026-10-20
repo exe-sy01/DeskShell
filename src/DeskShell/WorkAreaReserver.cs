@@ -16,7 +16,6 @@ namespace DeskShell;
 internal sealed class WorkAreaReserver : IDisposable
 {
     const int SPI_SETWORKAREA = 0x002F;
-    const int SPIF_SENDCHANGE = 0x0002;
     const int WM_SETTINGCHANGE = 0x001A;
 
     readonly HwndSource _listener;
@@ -50,10 +49,13 @@ internal sealed class WorkAreaReserver : IDisposable
         {
             var b = screen.Bounds;
             var full = new RECT { Left = b.Left, Top = b.Top, Right = b.Right, Bottom = b.Bottom };
-            // Announce this one: on the way out we want Explorer to recalculate and claim its taskbar space.
-            SystemParametersInfo(SPI_SETWORKAREA, 0, ref full, SPIF_SENDCHANGE);
+            SystemParametersInfo(SPI_SETWORKAREA, 0, ref full, 0);
         }
         _targets.Clear();
+
+        // Announce it so Explorer recalculates and claims its taskbar space. Sent with a timeout
+        // (unlike SPIF_SENDCHANGE) so a hung window can never stall quitting.
+        SendMessageTimeout(new IntPtr(0xffff), WM_SETTINGCHANGE, new IntPtr(SPI_SETWORKAREA), IntPtr.Zero, 0x0002 /* SMTO_ABORTIFHUNG */, 1000, out _);
     }
 
     void Apply()
@@ -126,4 +128,5 @@ internal sealed class WorkAreaReserver : IDisposable
 
     [DllImport("user32.dll")] static extern bool SystemParametersInfo(int action, int param, ref RECT rect, int winIni);
     [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
+    [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
 }

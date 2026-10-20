@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Media;
-using Microsoft.Win32;
 using Windows.UI.ViewManagement;
 using WinColor = Windows.UI.Color;
 
@@ -25,6 +24,9 @@ public static class ThemeManager
     public static void Start()
     {
         Apply();
+        // UISettings reports both accent and light/dark changes. (Not SystemEvents: its handlers run
+        // synchronously on the UI thread, which deadlocked quitting when DeskShell itself broadcast
+        // a settings change.)
         try
         {
             _ui = new UISettings();
@@ -32,13 +34,8 @@ public static class ThemeManager
         }
         catch (Exception ex)
         {
-            Log.Error("Can't follow accent colour changes", ex);
+            Log.Error("Can't follow theme and accent colour changes", ex);
         }
-        SystemEvents.UserPreferenceChanged += (_, e) =>
-        {
-            if (e.Category is UserPreferenceCategory.General or UserPreferenceCategory.Color or UserPreferenceCategory.VisualStyle)
-                Application.Current.Dispatcher.InvokeAsync(ApplyAndNotify);
-        };
     }
 
     static string _lastSignature = "";

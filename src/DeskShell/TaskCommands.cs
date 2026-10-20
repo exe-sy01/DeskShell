@@ -31,6 +31,12 @@ public static class TaskCommands
 
     public static ICommand Close { get; } = new Relay(o => (o as ApplicationWindow)?.Close());
 
+    /// <summary>Pins the window's app to the dock.</summary>
+    public static ICommand PinToDock { get; } = new Relay(o =>
+    {
+        if (o is ApplicationWindow window) Services.DockPins.PinWindow(window);
+    });
+
     sealed class Relay(Action<object?> run) : ICommand
     {
         public event EventHandler? CanExecuteChanged { add { } remove { } }

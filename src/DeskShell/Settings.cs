@@ -22,6 +22,15 @@ public sealed class PinnedApp
     public string Target { get; set; } = "";
 }
 
+/// <summary>Something pinned to the dock.</summary>
+public sealed class DockPin
+{
+    public string Name { get; set; } = "";
+    /// <summary>"app" = AppsFolder id (launched via shell:AppsFolder); "exe" = program path; "path" = file, folder or shortcut.</summary>
+    public string Kind { get; set; } = "app";
+    public string Target { get; set; } = "";
+}
+
 /// <summary>"When this app opens, put it here."</summary>
 public sealed class AppRule
 {
@@ -60,6 +69,8 @@ public sealed class Settings
     // Shell tiles, in display order. Tiles not listed are hidden.
     public List<TileSetting> Tiles { get; set; } = DefaultTiles();
     public List<PinnedApp> PinnedApps { get; set; } = new();
+    /// <summary>Items pinned to the dock, left to right.</summary>
+    public List<DockPin> DockPins { get; set; } = new();
 
     // Window management
     public bool ActiveWindowBorder { get; set; } = true;

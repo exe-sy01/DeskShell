@@ -104,6 +104,9 @@ public partial class App : Application
         await WaitForWorkAreaToSettle();
         if (_quitting) return;
 
+        var apps = new AppIndex();
+        apps.Start();
+        DockPins.Start(Shell, apps);
         CreateDocks();
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
 
@@ -128,8 +131,6 @@ public partial class App : Application
         Overview = new OverviewWindow(Shell);
 
         // The shell panel
-        var apps = new AppIndex();
-        apps.Start();
         _clipboard = new ClipboardHistory();
         _shellWindow = new ShellWindow(Shell, apps, _clipboard);
 
@@ -310,6 +311,7 @@ public partial class App : Application
             SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
             _hotkeys?.Dispose();
             BadgeService.Instance.Stop();
+            DockPins.Stop();
             _altTab?.Dispose();
             _events?.Dispose();
             _border?.Reset();
