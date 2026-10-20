@@ -91,7 +91,7 @@ public sealed class Settings
     public List<string> KnownTiles { get; set; } = new();
 
     /// <summary>Tiles added after the first release, with where they go in an existing layout (after which tile).</summary>
-    static readonly (string Id, int W, int H, string After)[] NewTiles = [("games", 4, 2, "pinned")];
+    static readonly (string Id, int W, int H, string After)[] NewTiles = [("games", 4, 2, "pinned"), ("mixer", 2, 3, "audioout")];
 
     public static List<TileSetting> DefaultTiles() => new()
     {
@@ -105,6 +105,7 @@ public sealed class Settings
         new("volume", 2, 1),
         new("media", 2, 1),
         new("audioout", 2, 1),
+        new("mixer", 2, 3),
         new("brightness", 2, 1),
         new("stats", 2, 1),
         new("weather", 1, 1),

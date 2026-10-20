@@ -4,6 +4,24 @@ namespace DeskShell.Services;
 
 public sealed record AudioDevice(string Id, string Name, bool IsDefault);
 
+/// <summary>
+/// One app's sound (all its audio sessions, on every output device). Its volume applies before the
+/// sound reaches the device, so it works alongside Voicemeeter.
+/// </summary>
+public sealed class AppAudio
+{
+    internal readonly List<object> Sessions = new(); // ISimpleAudioVolume objects
+
+    public required uint ProcessId { get; init; }
+    public required string Name { get; init; }
+    public string? ExePath { get; init; }
+    public bool IsSystemSounds { get; init; }
+    /// <summary>Short names of the output devices it plays through, e.g. "VAIO" or "Speakers".</summary>
+    public List<string> Devices { get; } = new();
+    public float Volume { get; set; }
+    public bool Muted { get; set; }
+}
+
 /// <summary>Speaker volume and output-device switching through Windows Core Audio.</summary>
 internal static class AudioService
 {
@@ -96,6 +114,166 @@ internal static class AudioService
             Log.Error("Could not switch audio output", ex);
             return false;
         }
+    }
+
+    // ---------- per-app volume (audio sessions) ----------
+
+    /// <summary>Apps currently making (or ready to make) sound, on every active output device.</summary>
+    public static List<AppAudio> GetAppAudio()
+    {
+        var apps = new Dictionary<uint, AppAudio>();
+        try
+        {
+            var enumerator = NewEnumerator();
+            if (enumerator.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, out var devices) != 0 || devices == null) return new();
+            devices.GetCount(out var deviceCount);
+            var managerIid = typeof(IAudioSessionManager2).GUID;
+            for (uint d = 0; d < deviceCount; d++)
+            {
+                if (devices.Item(d, out var device) != 0 || device == null) continue;
+                if (device.Activate(ref managerIid, CLSCTX_ALL, IntPtr.Zero, out var managerObj) != 0 || managerObj is not IAudioSessionManager2 manager) continue;
+                if (manager.GetSessionEnumerator(out var sessions) != 0 || sessions == null) continue;
+                var deviceName = ShortDeviceName(ReadName(device));
+                sessions.GetCount(out var count);
+                for (var i = 0; i < count; i++)
+                {
+                    if (sessions.GetSession(i, out var session) != 0 || session == null) continue;
+                    if (session.GetState(out var state) != 0 || state == 2) continue; // 2 = expired
+                    session.GetProcessId(out var pid);
+                    var isSystem = session.IsSystemSoundsSession() == 0;
+                    if (session is not ISimpleAudioVolume volume) continue;
+
+                    if (!apps.TryGetValue(pid, out var app))
+                    {
+                        var exe = isSystem ? null : ProcessPath(pid);
+                        app = new AppAudio
+                        {
+                            ProcessId = pid,
+                            ExePath = exe,
+                            IsSystemSounds = isSystem,
+                            Name = isSystem ? "System sounds" : AppNameFor(exe, pid)
+                        };
+                        volume.GetMasterVolume(out var level);
+                        volume.GetMute(out var muted);
+                        app.Volume = level;
+                        app.Muted = muted;
+                        apps[pid] = app;
+                    }
+                    app.Sessions.Add(volume);
+                    if (deviceName != null && !app.Devices.Contains(deviceName)) app.Devices.Add(deviceName);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Could not list app audio", ex);
+        }
+        return apps.Values.OrderBy(a => a.IsSystemSounds).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    public static void SetAppVolume(AppAudio app, float level)
+    {
+        app.Volume = Math.Clamp(level, 0f, 1f);
+        foreach (var s in app.Sessions.OfType<ISimpleAudioVolume>())
+            try { s.SetMasterVolume(app.Volume, ref _context); } catch { }
+    }
+
+    public static void SetAppMuted(AppAudio app, bool muted)
+    {
+        app.Muted = muted;
+        foreach (var s in app.Sessions.OfType<ISimpleAudioVolume>())
+            try { s.SetMute(muted, ref _context); } catch { }
+    }
+
+    /// <summary>"Voicemeeter AUX Input (VB-Audio Voicemeeter VAIO)" → "AUX"; "Speakers (Realtek…)" → "Speakers".</summary>
+    static string? ShortDeviceName(string? name)
+    {
+        if (string.IsNullOrEmpty(name)) return null;
+        if (name.Contains("VAIO3", StringComparison.OrdinalIgnoreCase)) return "VAIO3";
+        if (name.Contains("AUX", StringComparison.OrdinalIgnoreCase)) return "AUX";
+        if (name.StartsWith("Voicemeeter Input", StringComparison.OrdinalIgnoreCase)) return "VAIO";
+        var paren = name.IndexOf(" (", StringComparison.Ordinal);
+        return paren > 0 ? name[..paren] : name;
+    }
+
+    static string AppNameFor(string? exe, uint pid)
+    {
+        if (exe != null)
+        {
+            try
+            {
+                var info = System.Diagnostics.FileVersionInfo.GetVersionInfo(exe);
+                var product = info.ProductName?.Trim();
+                if (!string.IsNullOrEmpty(product) && product.Length <= 32 && !product.Contains("Operating System")) return product;
+                if (!string.IsNullOrWhiteSpace(info.FileDescription) && info.FileDescription.Length <= 40) return info.FileDescription.Trim();
+            }
+            catch { }
+            return System.IO.Path.GetFileNameWithoutExtension(exe);
+        }
+        try { return System.Diagnostics.Process.GetProcessById((int)pid).ProcessName; }
+        catch { return $"App {pid}"; }
+    }
+
+    static string? ProcessPath(uint pid)
+    {
+        var handle = OpenProcess(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, false, pid);
+        if (handle == IntPtr.Zero) return null;
+        try
+        {
+            var buffer = new System.Text.StringBuilder(1024);
+            var size = buffer.Capacity;
+            return QueryFullProcessImageName(handle, 0, buffer, ref size) ? buffer.ToString() : null;
+        }
+        finally
+        {
+            CloseHandle(handle);
+        }
+    }
+
+    [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool QueryFullProcessImageName(IntPtr process, int flags, System.Text.StringBuilder name, ref int size);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+
+    [ComImport, Guid("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioSessionManager2
+    {
+        [PreserveSig] int GetAudioSessionControl(IntPtr groupingParam, int flags, out IntPtr control);
+        [PreserveSig] int GetSimpleAudioVolume(IntPtr groupingParam, int flags, out IntPtr volume);
+        [PreserveSig] int GetSessionEnumerator(out IAudioSessionEnumerator sessions);
+    }
+
+    [ComImport, Guid("E2F5BB11-0570-40CA-ACDD-3AA01277DEE8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioSessionEnumerator
+    {
+        [PreserveSig] int GetCount(out int count);
+        [PreserveSig] int GetSession(int index, out IAudioSessionControl2 session);
+    }
+
+    [ComImport, Guid("bfb7ff88-7239-4fc9-8fa2-07c950be9c6d"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IAudioSessionControl2
+    {
+        [PreserveSig] int GetState(out int state);
+        [PreserveSig] int GetDisplayName(out IntPtr name);
+        [PreserveSig] int SetDisplayName(IntPtr name, IntPtr context);
+        [PreserveSig] int GetIconPath(out IntPtr path);
+        [PreserveSig] int SetIconPath(IntPtr path, IntPtr context);
+        [PreserveSig] int GetGroupingParam(out Guid param);
+        [PreserveSig] int SetGroupingParam(IntPtr param, IntPtr context);
+        [PreserveSig] int RegisterAudioSessionNotification(IntPtr client);
+        [PreserveSig] int UnregisterAudioSessionNotification(IntPtr client);
+        [PreserveSig] int GetSessionIdentifier(out IntPtr id);
+        [PreserveSig] int GetSessionInstanceIdentifier(out IntPtr id);
+        [PreserveSig] int GetProcessId(out uint pid);
+        [PreserveSig] int IsSystemSoundsSession();
+    }
+
+    [ComImport, Guid("87CE5498-68D6-44E5-9215-6DA47EF883D8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface ISimpleAudioVolume
+    {
+        [PreserveSig] int SetMasterVolume(float level, ref Guid context);
+        [PreserveSig] int GetMasterVolume(out float level);
+        [PreserveSig] int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid context);
+        [PreserveSig] int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
     }
 
     static string? ReadName(IMMDevice device)

@@ -452,13 +452,13 @@ public static class TileFactory
 {
     public static readonly string[] AllIds =
         ["pinned", "games", "wifi", "bluetooth", "focus", "darkmode", "screenshot", "layouts", "volume", "brightness",
-         "media", "audioout", "stats", "weather", "calendar", "clipboard", "notifications", "tray"];
+         "media", "audioout", "mixer", "stats", "weather", "calendar", "clipboard", "notifications", "tray"];
 
     public static readonly Dictionary<string, string> Titles = new()
     {
         ["pinned"] = "Pinned apps", ["games"] = "Games", ["wifi"] = "Wi-Fi / network", ["bluetooth"] = "Bluetooth", ["focus"] = "Do not disturb",
         ["darkmode"] = "Dark mode", ["screenshot"] = "Screenshot", ["layouts"] = "Window layout", ["volume"] = "Volume",
-        ["brightness"] = "Brightness", ["media"] = "Now playing", ["audioout"] = "Sound output", ["stats"] = "CPU / memory / GPU",
+        ["brightness"] = "Brightness", ["media"] = "Now playing", ["audioout"] = "Sound output", ["mixer"] = "Mixer (apps + Voicemeeter)", ["stats"] = "CPU / memory / GPU",
         ["weather"] = "Weather", ["calendar"] = "Calendar", ["clipboard"] = "Clipboard history", ["notifications"] = "Notifications",
         ["tray"] = "Background apps (tray)",
     };
@@ -477,6 +477,7 @@ public static class TileFactory
         "brightness" => new BrightnessTile(c),
         "media" => new MediaTile(c),
         "audioout" => new AudioOutputTile(c),
+        "mixer" => new MixerTile(c),
         "stats" => new StatsTile(c),
         "weather" => new WeatherTile(c),
         "calendar" => new CalendarTile(c),

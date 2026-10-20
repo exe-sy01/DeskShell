@@ -330,6 +330,151 @@ public sealed class StatsTile : TileBase
     }
 }
 
+/// <summary>
+/// Per-app volume (Windows audio sessions, so it works on any device, Voicemeeter's included) and,
+/// when Voicemeeter is running, its strips and buses with gain and mute.
+/// </summary>
+public sealed class MixerTile : TileBase
+{
+    readonly StackPanel _rows = new();
+    readonly TextBlock _heading;
+
+    public MixerTile(ShellContext c) : base(c)
+    {
+        Padding = new Thickness(12, 8, 8, 8);
+        _heading = Text("Mixer", 12.5, bold: true);
+        var refresh = IconButton("", "Refresh", (_, _) => OnOpened(), 28);
+        var header = new Grid { Height = 30, Margin = new Thickness(0, 0, 0, 2) };
+        header.Children.Add(_heading);
+        refresh.HorizontalAlignment = HorizontalAlignment.Right;
+        header.Children.Add(refresh);
+        var dock = new DockPanel();
+        DockPanel.SetDock(header, Dock.Top);
+        dock.Children.Add(header);
+        dock.Children.Add(new ScrollViewer
+        {
+            Content = _rows,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Padding = new Thickness(0, 0, 4, 0)
+        });
+        Child = dock;
+    }
+
+    public override string Id => "mixer";
+    public override string Title => "Mixer";
+    public override (int W, int H)[] Sizes => [(2, 3), (2, 4), (4, 3), (2, 2), (4, 2)];
+
+    public override void OnOpened()
+    {
+        _rows.Children.Clear();
+
+        var apps = AudioService.GetAppAudio();
+        _rows.Children.Add(Section(apps.Count == 0 ? "No apps are playing sound" : "Apps"));
+        foreach (var app in apps)
+        {
+            var a = app;
+            _rows.Children.Add(Row(AppIcon(a), a.Name, string.Join(", ", a.Devices), 0, 100, a.Volume * 100, v => $"{v:0}%", a.Muted,
+                v => AudioService.SetAppVolume(a, (float)v / 100f),
+                m => AudioService.SetAppMuted(a, m)));
+        }
+
+        if (VoicemeeterService.IsAvailable)
+        {
+            var channels = VoicemeeterService.Channels();
+            _rows.Children.Add(Section("Voicemeeter devices"));
+            foreach (var ch in channels.Where(x => !x.IsBus)) AddVm(ch);
+            _rows.Children.Add(Section("Voicemeeter outputs"));
+            foreach (var ch in channels.Where(x => x.IsBus)) AddVm(ch);
+        }
+    }
+
+    void AddVm(VmChannel channel) =>
+        _rows.Children.Add(Row(Icon(channel.IsBus ? "" : "", 14), channel.Name, null,
+            VoicemeeterService.MinGain, VoicemeeterService.MaxGain, channel.Gain, v => $"{v:+0;-0;0} dB", channel.Muted,
+            v => VoicemeeterService.SetGain(channel, (float)v),
+            m => VoicemeeterService.SetMuted(channel, m)));
+
+    static UIElement AppIcon(AppAudio app)
+    {
+        ImageSource? icon = null;
+        if (app.ExePath != null)
+        {
+            try
+            {
+                using var item = new ManagedShell.ShellFolders.ShellItem(app.ExePath);
+                item.AllowAsync = false;
+                icon = item.SmallIcon;
+            }
+            catch { }
+        }
+        return icon != null
+            ? new Image { Source = icon, Width = 16, Height = 16 }
+            : Icon(app.IsSystemSounds ? "" : "", 14);
+    }
+
+    static UIElement Section(string text)
+    {
+        var t = Text(text.ToUpperInvariant(), 10.5, bold: true, dim: true);
+        t.Margin = new Thickness(2, 6, 0, 2);
+        return t;
+    }
+
+    /// <summary>Icon · name (with an optional dim second line) · slider · value · mute.</summary>
+    static UIElement Row(UIElement icon, string name, string? sub, double min, double max, double value, Func<double, string> format, bool muted,
+        Action<double> setValue, Action<bool> setMuted)
+    {
+        var label = new StackPanel { Width = 96, Margin = new Thickness(8, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center, ToolTip = string.IsNullOrEmpty(sub) ? name : $"{name} → {sub}" };
+        var title = Text(name, 12);
+        title.TextTrimming = TextTrimming.CharacterEllipsis;
+        label.Children.Add(title);
+        if (!string.IsNullOrEmpty(sub))
+        {
+            var line = Text("→ " + sub, 10, dim: true);
+            line.TextTrimming = TextTrimming.CharacterEllipsis;
+            label.Children.Add(line);
+        }
+        var readout = Text(format(value), 11.5, dim: true);
+        readout.Width = 46;
+        readout.TextAlignment = TextAlignment.Right;
+        var slider = new Slider { Style = Res<Style>("FlatSlider"), Minimum = min, Maximum = max, Value = value, VerticalAlignment = VerticalAlignment.Center };
+        slider.ValueChanged += (_, e) =>
+        {
+            readout.Text = format(e.NewValue);
+            setValue(e.NewValue);
+        };
+        var muteGlyph = Icon(muted ? "" : "", 12);
+        var mute = new Button { Style = Res<Style>("GhostButton"), Width = 28, Height = 28, Content = muteGlyph, ToolTip = muted ? "Unmute" : "Mute" };
+        mute.Click += (_, _) =>
+        {
+            muted = !muted;
+            muteGlyph.Text = muted ? "" : "";
+            mute.ToolTip = muted ? "Unmute" : "Mute";
+            slider.Opacity = muted ? 0.45 : 1;
+            setMuted(muted);
+        };
+        slider.Opacity = muted ? 0.45 : 1;
+
+        var grid = new Grid { Height = string.IsNullOrEmpty(sub) ? 32 : 36 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        if (icon is FrameworkElement fe) fe.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(label, 1);
+        Grid.SetColumn(slider, 2);
+        Grid.SetColumn(readout, 3);
+        Grid.SetColumn(mute, 4);
+        grid.Children.Add(icon);
+        grid.Children.Add(label);
+        grid.Children.Add(slider);
+        grid.Children.Add(readout);
+        grid.Children.Add(mute);
+        return grid;
+    }
+}
+
 public sealed class WeatherTile : TileBase
 {
     readonly TextBlock _glyph = Icon("", 20);

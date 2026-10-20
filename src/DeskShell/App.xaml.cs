@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
@@ -366,6 +366,7 @@ public partial class App : Application
             _watcher?.Dispose();
             _hotkeys?.Dispose();
             GameMode.Stop();
+            VoicemeeterService.Disconnect();
             BadgeService.Instance.Stop();
             DockPins.Stop();
             _altTab?.Dispose();
