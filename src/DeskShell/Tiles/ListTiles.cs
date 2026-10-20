@@ -18,18 +18,21 @@ public abstract class PanelTile : TileBase
     protected readonly StackPanel HeaderActions = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
     protected readonly TextBlock HeaderText;
     readonly ContentControl _body = new();
+    readonly Grid _header;
+
+    protected bool HeaderVisible { set => _header.Visibility = value ? Visibility.Visible : Visibility.Collapsed; }
 
     protected PanelTile(ShellContext c, string heading) : base(c)
     {
         Padding = new Thickness(12, 8, 8, 10);
         HeaderText = Text(heading, 12.5, bold: true);
         HeaderText.Margin = new Thickness(2, 0, 0, 0);
-        var header = new Grid { Height = 30, Margin = new Thickness(0, 0, 0, 4) };
-        header.Children.Add(HeaderText);
-        header.Children.Add(HeaderActions);
+        _header = new Grid { Height = 30, Margin = new Thickness(0, 0, 0, 4) };
+        _header.Children.Add(HeaderText);
+        _header.Children.Add(HeaderActions);
         var dock = new DockPanel();
-        DockPanel.SetDock(header, Dock.Top);
-        dock.Children.Add(header);
+        DockPanel.SetDock(_header, Dock.Top);
+        dock.Children.Add(_header);
         dock.Children.Add(_body);
         Child = dock;
     }
@@ -330,6 +333,9 @@ public sealed class PinnedTile : PanelTile
         _apps.Children.Clear();
         var pinned = App.Settings.PinnedApps;
         _empty.Visibility = pinned.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        // Once something is pinned the apps speak for themselves; the heading would push them out of a one-row tile.
+        HeaderVisible = pinned.Count == 0;
+        _apps.VerticalAlignment = VerticalAlignment.Center;
         foreach (var p in pinned.ToList())
         {
             var found = Context.Apps.Find(p.Target);

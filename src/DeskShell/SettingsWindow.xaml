@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="DeskShell settings" Width="760" Height="860" MinWidth="560" MinHeight="400"
         WindowStartupLocation="CenterScreen"
-        Background="#12171C" Foreground="{StaticResource TextBrush}" FontFamily="{StaticResource UiFont}" FontSize="13.5"
+        Background="{DynamicResource BgBrush}" Foreground="{DynamicResource TextBrush}" FontFamily="{StaticResource UiFont}" FontSize="13.5"
         UseLayoutRounding="True">
 
     <Window.Resources>
@@ -14,7 +14,7 @@
             <Setter Property="Margin" Value="0,28,0,4" />
         </Style>
         <Style x:Key="Note" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextDimBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
             <Setter Property="FontSize" Value="12.5" />
             <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="Margin" Value="0,0,0,12" />
@@ -29,13 +29,13 @@
     </Window.Resources>
 
     <DockPanel>
-        <Border DockPanel.Dock="Bottom" Background="#0E1316" BorderBrush="{StaticResource EdgeBrush}" BorderThickness="0,1,0,0" Padding="28,14">
+        <Border DockPanel.Dock="Bottom" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource EdgeBrush}" BorderThickness="0,1,0,0" Padding="28,14">
             <Grid>
                 <Button Style="{StaticResource PillButton}" Tag="&#xE8A5;" Content="Open settings file" HorizontalAlignment="Left" Click="OpenFile_Click" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <TextBlock x:Name="Status" Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" Margin="0,0,14,0" />
+                    <TextBlock x:Name="Status" Foreground="{DynamicResource TextDimBrush}" VerticalAlignment="Center" Margin="0,0,14,0" />
                     <Button Style="{StaticResource PillButton}" Tag="&#xE711;" Content="Close" Margin="0,0,8,0" Click="Close_Click" />
-                    <Button Style="{StaticResource PillButton}" Tag="&#xE74E;" Content="Save" Click="Save_Click" Background="{StaticResource AccentBrush}" Foreground="{StaticResource OnAccentBrush}" />
+                    <Button Style="{StaticResource AccentButton}" Tag="&#xE74E;" Content="Save" Click="Save_Click" />
                 </StackPanel>
             </Grid>
         </Border>

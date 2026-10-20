@@ -198,7 +198,7 @@ internal sealed class AltTabWindow : ThumbnailWindow
     {
         SizeToContent = SizeToContent.WidthAndHeight;
         ShowActivated = false;
-        Background = new SolidColorBrush(Color.FromRgb(0x17, 0x1C, 0x21));
+        SetResourceReference(BackgroundProperty, "CardBrush");
         Content = new Border { Padding = new Thickness(14), Child = _panel };
         SourceInitialized += (_, _) =>
         {

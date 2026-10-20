@@ -16,6 +16,14 @@ Or run from source: `dotnet run --project src/DeskShell`.
 
 DeskShell never changes the Windows taskbar's settings (such as auto-hide). It only hides the taskbar window and reserves a strip at the bottom of each screen for the dock, and gives both back when it quits.
 
+## Look
+
+Windows 11 Fluent styling to match the [Files](https://files.community) app: follows Windows' light/dark mode and your accent colour, and updates live when you change either.
+
+## File manager
+
+DeskShell doesn't include its own file manager; it's set up alongside [Files](https://files.community), which opens folders, Win+E and "Show in folder" instead of File Explorer. To switch back to File Explorer, turn off "Set Files as default" in Files' settings (Advanced).
+
 ## What's in it
 
 **Dock** (bottom of every monitor): that monitor's open windows with icons and names. Click to switch, click again to minimise, right-click to close. Hides while a fullscreen game runs. The button on the left opens the shell.

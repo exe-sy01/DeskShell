@@ -26,8 +26,11 @@ public abstract class TileBase : Border
     protected TileBase(ShellContext context)
     {
         Context = context;
-        CornerRadius = new CornerRadius(14);
-        Background = Res<Brush>("TileBrush");
+        // Fluent card: 8 px corners, faint fill and a hairline edge, following the live theme.
+        CornerRadius = new CornerRadius(8);
+        BorderThickness = new Thickness(1);
+        SetResourceReference(BackgroundProperty, "TileBrush");
+        SetResourceReference(BorderBrushProperty, "EdgeBrush");
         Padding = new Thickness(14, 12, 14, 12);
         ClipToBounds = false;
     }
@@ -45,15 +48,19 @@ public abstract class TileBase : Border
 
     protected static T Res<T>(string key) => (T)Application.Current.FindResource(key);
 
-    protected static TextBlock Text(string text = "", double size = 13, bool bold = false, bool dim = false) => new()
+    protected static TextBlock Text(string text = "", double size = 13, bool bold = false, bool dim = false)
     {
-        Text = text,
-        FontSize = size,
-        FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
-        Foreground = Res<Brush>(dim ? "TextDimBrush" : "TextBrush"),
-        TextTrimming = TextTrimming.CharacterEllipsis,
-        VerticalAlignment = VerticalAlignment.Center
-    };
+        var block = new TextBlock
+        {
+            Text = text,
+            FontSize = size,
+            FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        block.SetResourceReference(TextBlock.ForegroundProperty, dim ? "TextDimBrush" : "TextBrush");
+        return block;
+    }
 
     protected static TextBlock Icon(string glyph, double size = 16) => new()
     {
@@ -80,6 +87,7 @@ public abstract class ToggleTile : TileBase
     protected ToggleTile(ShellContext context, string glyph, string title) : base(context)
     {
         Padding = new Thickness(0);
+        BorderThickness = new Thickness(0); // the toggle draws its own card
         Background = Brushes.Transparent;
         Button = new ToggleButton { Style = Res<Style>("Tile"), Tag = glyph, Content = title, Height = double.NaN };
         Button.Click += (_, _) => OnToggled(Button.IsChecked == true);
@@ -143,14 +151,16 @@ public sealed class TileHost : Grid
 
         _editFrame = new Border
         {
-            CornerRadius = new CornerRadius(14),
-            BorderThickness = new Thickness(1.5),
-            BorderBrush = (Brush)Application.Current.FindResource("AccentBrush"),
-            Background = new SolidColorBrush(Color.FromArgb(0xF2, 0x1B, 0x20, 0x26)),
+            CornerRadius = new CornerRadius(8),
+            BorderThickness = new Thickness(2),
             Cursor = System.Windows.Input.Cursors.SizeAll,
             Visibility = Visibility.Collapsed,
             Child = new Grid { Children = { title, bar } }
         };
+        _editFrame.SetResourceReference(Border.BorderBrushProperty, "AccentBrush");
+        _editFrame.SetResourceReference(Border.BackgroundProperty, "CardBrush");
+        _sizeLabel.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
+        title.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
         Children.Add(_editFrame);
         UpdateSizeLabel();
     }
@@ -185,15 +195,19 @@ public sealed class TileHost : Grid
 
     void UpdateSizeLabel() => _sizeLabel.Text = $"{ColSpan}×{RowSpan}";
 
-    static Button EditButton(string glyph, string tip) => new()
+    static Button EditButton(string glyph, string tip)
     {
-        Style = (Style)Application.Current.FindResource("GhostButton"),
-        Width = 30,
-        Height = 30,
-        ToolTip = tip,
-        Background = new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF)),
-        Content = new TextBlock { Text = glyph, Style = (Style)Application.Current.FindResource("Icon"), FontSize = 12 }
-    };
+        var button = new Button
+        {
+            Style = (Style)Application.Current.FindResource("GhostButton"),
+            Width = 30,
+            Height = 30,
+            ToolTip = tip,
+            Content = new TextBlock { Text = glyph, Style = (Style)Application.Current.FindResource("Icon"), FontSize = 12 }
+        };
+        button.SetResourceReference(Control.BackgroundProperty, "TileHoverBrush");
+        return button;
+    }
 }
 
 /// <summary>

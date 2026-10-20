@@ -65,6 +65,9 @@ public partial class App : Application
 
         base.OnStartup(e);
         Log.Info("Starting DeskShell");
+        ThemeManager.Start();
+        // Tiles are built in code from the current colours; rebuild them when Windows' theme or accent changes.
+        ThemeManager.Changed += () => _shellWindow?.RebuildTiles();
 
         // Creating %LOCALAPPDATA%\DeskShell\debug turns on ManagedShell's detailed log, for bug hunting.
         var logFolder = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DeskShell");

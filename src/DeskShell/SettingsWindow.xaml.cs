@@ -19,8 +19,8 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         SourceInitialized += (_, _) =>
         {
-            // Dark title bar to match.
-            var on = 1;
+            // Title bar follows Windows' light/dark mode, like the rest of the window.
+            var on = ThemeManager.IsDark ? 1 : 0;
             WmNative.DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, 20, ref on, sizeof(int));
         };
         Load();

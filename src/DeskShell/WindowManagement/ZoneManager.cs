@@ -184,7 +184,7 @@ internal sealed class ZoneOverlay : Window
             {
                 Width = z.Width / scale,
                 Height = z.Height / scale,
-                CornerRadius = new CornerRadius(12),
+                CornerRadius = new CornerRadius(8),
                 BorderThickness = new Thickness(2),
                 BorderBrush = new SolidColorBrush(on ? accent : Color.FromArgb(0x90, 0xFF, 0xFF, 0xFF)),
                 Background = new SolidColorBrush(on ? Color.FromArgb(0x55, accent.R, accent.G, accent.B) : Color.FromArgb(0x40, 0x10, 0x14, 0x18)),

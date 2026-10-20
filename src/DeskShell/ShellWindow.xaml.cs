@@ -314,6 +314,14 @@ public partial class ShellWindow : Window
             AddTile(setting.Id, setting.Width, setting.Height);
     }
 
+    /// <summary>Recreates the tiles (after a theme change), keeping the layout.</summary>
+    public void RebuildTiles()
+    {
+        BuildTiles();
+        if (IsOpen)
+            foreach (var host in Hosts) SafeCall(host.Tile.OnOpened);
+    }
+
     public void ResetTiles()
     {
         App.Settings.Tiles = Settings.DefaultTiles();

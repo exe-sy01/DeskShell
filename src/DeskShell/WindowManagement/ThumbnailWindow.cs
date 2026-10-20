@@ -34,8 +34,8 @@ internal abstract class ThumbnailWindow : Window
         ShowInTaskbar = false;
         Topmost = true;
         AllowsTransparency = false;
-        Background = new SolidColorBrush(Color.FromRgb(0x0E, 0x13, 0x17));
-        Foreground = (Brush)Application.Current.FindResource("TextBrush");
+        SetResourceReference(BackgroundProperty, "BgBrush");
+        SetResourceReference(ForegroundProperty, "TextBrush");
         FontFamily = (FontFamily)Application.Current.FindResource("UiFont");
         UseLayoutRounding = true;
         Left = Top = -20000;
@@ -46,7 +46,8 @@ internal abstract class ThumbnailWindow : Window
 
     protected Card MakeCard(ApplicationWindow window, double width, double height, bool closeButton)
     {
-        var slot = new Border { Margin = new Thickness(5), CornerRadius = new CornerRadius(6), Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x20, 0x26)) };
+        var slot = new Border { Margin = new Thickness(5), CornerRadius = new CornerRadius(4) };
+        slot.SetResourceReference(Border.BackgroundProperty, "TileBrush");
         if (IsIconic(window.Handle))
         {
             var minimized = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -55,7 +56,7 @@ internal abstract class ThumbnailWindow : Window
             slot.Child = minimized;
         }
 
-        var ring = new Border { CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(3), BorderBrush = Brushes.Transparent, Child = slot };
+        var ring = new Border { CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(3), BorderBrush = Brushes.Transparent, Child = slot };
 
         var title = new DockPanel { Height = 30, LastChildFill = true };
         title.Children.Add(new Image { Source = window.Icon, Width = 16, Height = 16, Margin = new Thickness(4, 0, 8, 0) });
