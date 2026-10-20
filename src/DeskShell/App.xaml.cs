@@ -32,7 +32,7 @@ public partial class App : Application
     AltTabController? _altTab;
     ClipboardHistory? _clipboard;
     Mutex? _singleInstance;
-    DispatcherTimer? _displayDebounce;
+    SystemWatcher? _watcher;
     DispatcherTimer? _trimTimer;
     bool _quitting;
 
@@ -108,7 +108,7 @@ public partial class App : Application
         apps.Start();
         DockPins.Start(Shell, apps);
         CreateDocks();
-        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+        StartWatchingSystem();
 
         // Window management
         Zones = new ZoneManager();
@@ -258,22 +258,62 @@ public partial class App : Application
         _docks.Clear();
     }
 
-    void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    /// <summary>
+    /// Tray apps register their icons with whichever tray answers first; after Explorer restarts that
+    /// can be Explorer's. ManagedShell can ask them all to register again (with its tray, which it
+    /// keeps in front); that method isn't public, so call it by name, else broadcast the request ourselves.
+    /// </summary>
+    void AskTrayAppsToReAddIcons()
     {
-        // Monitors often report several changes in a row; rebuild once they settle.
-        Dispatcher.BeginInvoke(() =>
+        try
         {
-            _displayDebounce ??= new DispatcherTimer(TimeSpan.FromSeconds(1.5), DispatcherPriority.Normal, (_, _) =>
+            var method = Shell.TrayService.GetType().GetMethod("SendTaskbarCreated",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+            if (method != null)
             {
-                _displayDebounce!.Stop();
-                if (_quitting) return;
-                Log.Info("Display setup changed; rebuilding docks");
-                CloseDocks();
-                CreateDocks();
-            }, Dispatcher);
-            _displayDebounce.Stop();
-            _displayDebounce.Start();
-        });
+                method.Invoke(Shell.TrayService, null);
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ManagedShell couldn't ask tray apps to re-add icons", ex);
+        }
+        PostMessage(new IntPtr(0xffff), RegisterWindowMessage("TaskbarCreated"), IntPtr.Zero, IntPtr.Zero);
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern uint RegisterWindowMessage(string message);
+    [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    /// <summary>Recreates the docks for the current monitors and re-reserves their screen space.</summary>
+    void RebuildDocks(string why)
+    {
+        if (_quitting) return;
+        Log.Info($"Rebuilding docks ({why})");
+        HideShell();
+        CloseDocks();
+        CreateDocks();
+    }
+
+    void StartWatchingSystem()
+    {
+        _watcher = new SystemWatcher();
+        _watcher.DisplaysChanged += () => RebuildDocks("displays changed");
+        _watcher.Resumed += () => RebuildDocks("woke from sleep");
+        _watcher.ExplorerRestarted += () =>
+        {
+            // Explorer's new taskbar is hidden by TaskbarHider within a moment; Explorer also reset the
+            // usable screen area and tray apps re-registered their icons with it.
+            RebuildDocks("Explorer restarted");
+            var before = Shell.NotificationArea.TrayIcons.Count;
+            AskTrayAppsToReAddIcons();
+            BadgeService.Instance.AnnounceAllButtons(Shell); // and re-send their badges
+            Dispatcher.InvokeAsync(async () =>
+            {
+                await Task.Delay(4000);
+                Log.Info($"After Explorer restart: {Shell.NotificationArea.TrayIcons.Count} tray icons (had {before})");
+            });
+        };
     }
 
     public void ToggleShell()
@@ -323,7 +363,7 @@ public partial class App : Application
 
         try
         {
-            SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+            _watcher?.Dispose();
             _hotkeys?.Dispose();
             GameMode.Stop();
             BadgeService.Instance.Stop();

@@ -53,6 +53,13 @@ public sealed class BadgeService : INotifyPropertyChanged
             };
     }
 
+    /// <summary>Asks every open window to re-send its badge (e.g. after Explorer restarted).</summary>
+    public void AnnounceAllButtons(ManagedShell.ShellManager shell)
+    {
+        foreach (var w in shell.Tasks.GroupedWindows?.SourceCollection?.OfType<ManagedShell.WindowsTasks.ApplicationWindow>() ?? [])
+            AnnounceButton(w.Handle);
+    }
+
     static readonly uint TaskbarButtonCreated = RegisterWindowMessage("TaskbarButtonCreated");
 
     static void AnnounceButton(IntPtr hwnd) => PostMessage(hwnd, TaskbarButtonCreated, IntPtr.Zero, IntPtr.Zero);
