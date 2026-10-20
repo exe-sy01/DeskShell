@@ -1,0 +1,643 @@
+<title>Desktop Shell Planner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: split workbench. Left: live mock desktop + generated spec (sticky). Right: the questionnaire. */
+:root {
+  --bg: #EBEFF1;
+  --panel: #F7F9FA;
+  --ink: #12181D;
+  --muted: #586571;
+  --line: #D2DAE0;
+  --accent: #0D7480;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #D3EAEC;
+  --easy: #2D7A33; --easy-bg: #DCEFDD;
+  --med: #9A5C00;  --med-bg: #F6E7CC;
+  --hard: #B3261E; --hard-bg: #F7DAD7;
+  /* the mock screen is its own dark world in both themes */
+  --pv-wall-a: #183447; --pv-wall-b: #3E2B4F; --pv-wall-c: #0E1B24;
+  --pv-text: #EEF2F5; --pv-dim: #A9B6C1;
+  --pv-glass: rgba(24, 30, 38, .52);
+  --pv-mica: #262C34;
+  --pv-flat: #15191E;
+  --pv-edge: rgba(255,255,255,.14);
+  --pv-win: #E8ECEF; --pv-win-bar: #CDD4DA; --pv-win-line: #B9C2CA;
+  --pv-fence: rgba(14, 20, 26, .45);
+  --pv-tile: rgba(255,255,255,.09); --pv-tile-on: #3FB8C2;
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1316; --panel: #151C21; --ink: #E4EAEE; --muted: #93A2AE; --line: #27323A;
+    --accent: #45BCC6; --accent-ink: #062024; --accent-soft: #15353A;
+    --easy: #86CC89; --easy-bg: #1B3320; --med: #E7AE55; --med-bg: #3A2C12; --hard: #F2918A; --hard-bg: #3E1C1A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1316; --panel: #151C21; --ink: #E4EAEE; --muted: #93A2AE; --line: #27323A;
+  --accent: #45BCC6; --accent-ink: #062024; --accent-soft: #15353A;
+  --easy: #86CC89; --easy-bg: #1B3320; --med: #E7AE55; --med-bg: #3A2C12; --hard: #F2918A; --hard-bg: #3E1C1A;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 64px;
+}
+.wrap { max-width: 1260px; margin: 0 auto; }
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; margin-bottom: 24px; }
+h1 { font-family: var(--f-display); font-weight: 700; font-size: clamp(28px, 4vw, 40px); line-height: 1.05; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+.lede { color: var(--muted); max-width: 62ch; margin: 8px 0 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+.grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+.stage { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+@media (max-width: 920px) { .grid { grid-template-columns: minmax(0, 1fr); } .stage { position: static; } }
+
+/* chips */
+.chip { display: inline-flex; align-items: center; font-family: var(--f-mono); font-size: 11px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; padding: 1px 7px; border-radius: 99px; white-space: nowrap; }
+.chip.easy { color: var(--easy); background: var(--easy-bg); }
+.chip.medium { color: var(--med); background: var(--med-bg); }
+.chip.hard { color: var(--hard); background: var(--hard-bg); }
+
+/* preview */
+.pv-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.btn { font: 500 13px var(--f-body); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn:focus-visible, .opt input:focus-visible + .box, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.desk {
+  container-type: inline-size;
+  position: relative; width: 100%; aspect-ratio: 16 / 10; max-width: 100%;
+  border-radius: 10px; overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 85% 10%, var(--pv-wall-b), transparent 60%),
+    radial-gradient(100% 80% at 10% 100%, var(--pv-wall-a), transparent 65%),
+    var(--pv-wall-c);
+  color: var(--pv-text); font-family: var(--f-body);
+  box-shadow: 0 1px 0 var(--line), 0 18px 40px -24px rgba(0,0,0,.6);
+}
+.fence { position: absolute; background: var(--pv-fence); border: 1px solid var(--pv-edge); border-radius: .8cqw; padding: .6cqw; font-size: 1.25cqw; }
+.fence b { display: block; font-weight: 600; font-size: 1.15cqw; color: var(--pv-dim); margin-bottom: .5cqw; letter-spacing: .02em; }
+.fence .icons { display: grid; grid-template-columns: repeat(3, 2.6cqw); gap: .7cqw; }
+.fence .icons i { width: 2.6cqw; height: 2.6cqw; border-radius: .5cqw; display: block; }
+.win { position: absolute; background: var(--pv-win); border-radius: .7cqw; overflow: hidden; box-shadow: 0 1.2cqw 3cqw -1cqw rgba(0,0,0,.6); transition: all .35s ease; }
+.win .tb { height: 2.4cqw; background: var(--pv-win-bar); display: flex; align-items: center; padding: 0 .9cqw; font-size: 1.1cqw; color: #2B343C; font-weight: 600; }
+.win .ln { height: .7cqw; margin: .9cqw 1cqw 0; background: var(--pv-win-line); border-radius: .3cqw; }
+.win.active.bordered { outline: .25cqw solid var(--pv-tile-on); }
+.win.float-tag::after { content: "floating"; position: absolute; right: .8cqw; top: .55cqw; font: 500 .95cqw var(--f-mono); color: #4A5560; }
+@media (prefers-reduced-motion: reduce) { .win, .cc { transition: none !important; } }
+
+.bar { position: absolute; display: flex; align-items: center; gap: 1cqw; font-size: 1.2cqw; z-index: 3; }
+.surface { border: 1px solid var(--pv-edge); }
+.theme-glass .surface { background: var(--pv-glass); backdrop-filter: blur(10px) saturate(1.3); -webkit-backdrop-filter: blur(10px) saturate(1.3); }
+.theme-mica .surface { background: var(--pv-mica); }
+.theme-flat .surface { background: var(--pv-flat); border-color: transparent; }
+.bar.h { flex-direction: row; }
+.bar.v { flex-direction: column; }
+.bar .grp { display: flex; align-items: center; gap: .8cqw; }
+.bar.v .grp { flex-direction: column; }
+.bar.full { border-radius: 0; padding: 0 1.2cqw; justify-content: space-between; }
+.bar.full.v { padding: 1.2cqw 0; }
+.bar.dock, .bar .pill { border-radius: 1.3cqw; padding: .7cqw 1.1cqw; }
+.bar.split { background: none !important; border: 0; justify-content: space-between; backdrop-filter: none; }
+.bar.ghost { opacity: .5; outline: 1px dashed var(--pv-dim); outline-offset: .4cqw; }
+.reveal-hint { position: absolute; font: 500 1.05cqw var(--f-mono); color: var(--pv-dim); z-index: 3; }
+.edge-line { position: absolute; background: var(--pv-tile-on); opacity: .8; z-index: 3; border-radius: 1cqw; }
+.app { width: 2.4cqw; height: 2.4cqw; border-radius: .6cqw; position: relative; flex: none; }
+.app.run::after { content: ""; position: absolute; left: 50%; bottom: -.7cqw; width: .7cqw; height: .25cqw; margin-left: -.35cqw; border-radius: 1cqw; background: var(--pv-text); }
+.bar.v .app.run::after { left: -.7cqw; bottom: 50%; width: .25cqw; height: .7cqw; margin: 0 0 -.35cqw 0; }
+.launch { width: 2.4cqw; height: 2.4cqw; border-radius: 50%; border: .25cqw solid var(--pv-text); flex: none; }
+.ws { display: flex; gap: .4cqw; }
+.bar.v .ws { flex-direction: column; }
+.ws span { font: 500 1cqw var(--f-mono); width: 1.8cqw; height: 1.8cqw; display: grid; place-items: center; border-radius: .4cqw; background: var(--pv-tile); }
+.ws span.on { background: var(--pv-tile-on); color: #062024; }
+.txt { white-space: nowrap; color: var(--pv-text); }
+.txt.dim { color: var(--pv-dim); }
+.tray { display: flex; gap: .4cqw; }
+.bar.v .tray { flex-direction: column; }
+.tray i { width: 1.1cqw; height: 1.1cqw; border-radius: 50%; background: var(--pv-dim); display: block; }
+.ccbtn { display: flex; flex-direction: column; gap: .3cqw; padding: .3cqw; border-radius: .5cqw; background: var(--pv-tile); }
+.ccbtn i { display: block; width: 2cqw; height: .7cqw; border-radius: 1cqw; background: var(--pv-dim); }
+.ccbtn i:first-child { background: var(--pv-tile-on); }
+
+.cc { position: absolute; width: 33cqw; border-radius: 1.4cqw; padding: 1.1cqw; z-index: 4; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .8cqw; font-size: 1.05cqw; transition: opacity .25s ease; }
+.cc .t { background: var(--pv-tile); border-radius: .9cqw; padding: .8cqw; min-height: 5.2cqw; display: flex; flex-direction: column; justify-content: space-between; gap: .4cqw; }
+.cc .t.on { background: var(--pv-tile-on); color: #062024; }
+.cc .t.w2 { grid-column: span 2; }
+.cc .t.w4 { grid-column: span 4; min-height: 0; }
+.cc .t .dot { width: 1.6cqw; height: 1.6cqw; border-radius: 50%; background: currentColor; opacity: .85; }
+.cc .slider { height: 1.3cqw; border-radius: 1cqw; background: rgba(255,255,255,.18); position: relative; overflow: hidden; }
+.cc .slider::before { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--v, 60%); background: var(--pv-text); }
+.cc .lbl { font-weight: 600; line-height: 1.15; }
+.cc .sub { color: var(--pv-dim); font-size: .95cqw; }
+.cc .t.on .sub { color: #0B3B40; }
+.cc .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: .2cqw; font: 500 .85cqw var(--f-mono); color: var(--pv-dim); }
+.cc .cal span.today { background: var(--pv-tile-on); color: #062024; border-radius: .3cqw; text-align: center; }
+.cc .note { background: rgba(255,255,255,.06); border-radius: .5cqw; padding: .4cqw .6cqw; color: var(--pv-dim); }
+.pv-cap { font-size: 13px; color: var(--muted); margin: 0; }
+
+/* summary */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+.sum-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.sum-head h2 { font-family: var(--f-display); font-size: 20px; margin: 0; font-weight: 700; }
+.tally { display: flex; gap: 6px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+pre.spec { font-family: var(--f-mono); font-size: 12.5px; line-height: 1.6; margin: 0; white-space: pre-wrap; word-break: break-word; max-height: 300px; overflow: auto; color: var(--ink); }
+.save { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.save .st::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 7px; vertical-align: 1px; }
+.save .st.ok::before { background: var(--easy); }
+.save .st.busy::before { background: var(--med); }
+
+/* questionnaire */
+.qs { display: flex; flex-direction: column; gap: 36px; min-width: 0; }
+section.part { display: flex; flex-direction: column; gap: 22px; }
+section.part > header h2 { font-family: var(--f-display); font-weight: 700; font-size: 24px; margin: 0; letter-spacing: -.005em; }
+section.part > header p { margin: 4px 0 0; color: var(--muted); max-width: 60ch; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+legend { font-weight: 600; font-size: 15.5px; padding: 0; margin-bottom: 2px; }
+.qhint { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+.opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
+.opt { position: relative; display: block; cursor: pointer; }
+.opt input { position: absolute; opacity: 0; pointer-events: none; }
+.opt .box { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 2px 10px; align-items: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); height: 100%; transition: border-color .15s, background .15s; }
+.opt:hover .box { border-color: var(--muted); }
+.opt input:checked + .box { border-color: var(--accent); background: var(--accent-soft); }
+.mark { width: 18px; height: 18px; margin-top: 2px; border: 1.5px solid var(--muted); background: var(--panel); display: grid; place-items: center; }
+.opt input[type=radio] + .box .mark { border-radius: 50%; }
+.opt input[type=checkbox] + .box .mark { border-radius: 5px; }
+.opt input:checked + .box .mark { border-color: var(--accent); background: var(--accent); }
+.opt input:checked + .box .mark::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent-ink); }
+.opt input[type=checkbox]:checked + .box .mark::after { width: 9px; height: 5px; border-radius: 0; background: none; border: 2px solid var(--accent-ink); border-top: 0; border-right: 0; transform: rotate(-45deg) translate(1px, -1px); }
+.opt .name { font-weight: 500; line-height: 1.35; }
+.opt .why { grid-column: 2 / 4; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+textarea { width: 100%; min-height: 110px; resize: vertical; font: 15px/1.5 var(--f-body); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.callout { font-size: 13.5px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 0 10px 10px 0; padding: 10px 14px; }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Desktop Shell Planner</h1>
+      <p class="lede">Pick what your taskbar replacement, control center and window manager should do. The mock screen updates as you go, and your answers save so Claude can read them back. Everything starts on a guess; change anything.</p>
+    </div>
+    <div class="legend" aria-label="Build difficulty legend">
+      Build effort:
+      <span class="chip easy">easy</span>
+      <span class="chip medium">medium</span>
+      <span class="chip hard">hard</span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <aside class="stage">
+      <div class="pv-head">
+        <span class="eyebrow">Live mock-up</span>
+        <button class="btn" id="ccToggle" type="button" aria-pressed="true">Control center open</button>
+      </div>
+      <div class="desk" id="desk" role="img" aria-label="Mock desktop showing your current choices"></div>
+      <p class="pv-cap" id="pvCap"></p>
+
+      <div class="card">
+        <div class="sum-head">
+          <h2>Your spec</h2>
+          <div class="tally" id="tally"></div>
+        </div>
+        <pre class="spec" id="spec"></pre>
+        <div class="save">
+          <span class="st" id="saveState">Not saved yet</span>
+          <button class="btn primary" id="copyBtn" type="button">Copy spec</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="qs" id="qs"></main>
+  </div>
+</div>
+
+<script>
+const SECTIONS = [
+  { id: "bar", title: "The bar", intro: "What replaces the Windows taskbar. Hiding the stock taskbar is the easy part: Explorer keeps running, so Start, your tray apps and Fences keep working.",
+    qs: [
+      { id: "bar_pos", label: "Where does it live?", type: "single", opts: [
+        ["bottom", "Bottom edge", "easy"], ["top", "Top edge (macOS menu-bar style)", "easy"],
+        ["left", "Left edge", "easy"], ["right", "Right edge", "easy"],
+        ["none", "No bar at all, control center only", "easy", "Opened by hotkey or hot corner."] ] },
+      { id: "bar_style", label: "What shape?", type: "single", opts: [
+        ["full", "Full-width bar", "easy"],
+        ["dock", "Floating dock, centered", "easy", "Like the macOS Dock."],
+        ["split", "Floating islands: left / center / right", "easy", "Separate pills, wallpaper shows between them."],
+        ["autohide", "Hidden until the mouse hits the edge", "medium", "Needs edge detection that doesn't fight fullscreen games."] ] },
+      { id: "bar_items", label: "What's on it?", type: "multi", opts: [
+        ["launcher", "App search / launcher", "medium", "Indexing installed apps and shortcuts."],
+        ["pinned", "Pinned apps", "easy"],
+        ["running", "Open windows (running apps)", "medium", "Tracking windows, icons and grouping reliably."],
+        ["workspaces", "Workspace switcher", "medium"],
+        ["clock", "Clock and date", "easy"],
+        ["tray", "System tray icons (Discord, Steam…)", "hard", "No public API; we'd have to impersonate the Windows tray to receive icons."],
+        ["media", "Now playing", "easy", "Windows media session API covers Spotify, browsers, etc."],
+        ["weather", "Weather", "easy", "Needs a free weather API."],
+        ["stats", "CPU / RAM / GPU", "easy"],
+        ["cc_button", "Control center button", "easy"] ] },
+      { id: "monitors", label: "Multiple monitors?", type: "single", opts: [
+        ["each", "A bar on every monitor, showing that monitor's windows", "medium"],
+        ["mirror", "A bar on every monitor, all identical", "easy"],
+        ["primary", "Main monitor only", "easy"],
+        ["single", "I only have one monitor", "easy"] ] }
+    ] },
+  { id: "cc", title: "Control center", intro: "The pop-out panel of quick toggles and sliders, like the one on a Mac or iPhone.",
+    qs: [
+      { id: "cc_open", label: "How do you open it?", type: "multi", opts: [
+        ["button", "Click a button on the bar", "easy"],
+        ["hotkey", "Keyboard shortcut", "medium", "Win-key combos Windows already owns (like Win+A) need a low-level hook."],
+        ["corner", "Hot corner", "easy"],
+        ["edge", "Push the mouse against a screen edge", "easy"] ] },
+      { id: "cc_tiles", label: "What goes in it?", type: "multi", opts: [
+        ["wifi", "Wi-Fi on/off and network picker", "medium"],
+        ["bt", "Bluetooth on/off and devices", "medium"],
+        ["volume", "Volume slider", "easy"],
+        ["audio_out", "Switch audio output (speakers / headset)", "medium", "Uses an undocumented but widely used Windows interface."],
+        ["brightness", "Brightness slider", "medium", "Easy on laptops; external monitors need DDC/CI support."],
+        ["media", "Media player controls", "easy"],
+        ["dnd", "Do Not Disturb", "hard", "Windows has no public API to toggle it."],
+        ["night", "Night light", "hard", "Undocumented settings blob; can break on Windows updates."],
+        ["dark", "Light / dark mode switch", "easy"],
+        ["battery", "Battery", "easy"],
+        ["screenshot", "Screenshot / snip", "easy"],
+        ["clipboard", "Clipboard history", "medium"],
+        ["calendar", "Calendar", "easy", "A month view is easy; showing your events means connecting an account."],
+        ["notifications", "Notifications list", "hard", "Reading other apps' notifications needs special app packaging and permission."],
+        ["power", "Sleep / restart / shut down", "easy"],
+        ["layout", "Window layout switcher", "medium"] ] },
+      { id: "cc_custom", label: "Tile layout", type: "single", opts: [
+        ["drag", "I want to rearrange and resize tiles myself", "medium"],
+        ["fixed", "A fixed layout is fine, I'll pick tiles in settings", "easy"] ] }
+    ] },
+  { id: "wm", title: "Window manager", intro: "How windows get placed, moved and switched. This is the biggest piece of work, so it's worth being specific.",
+    qs: [
+      { id: "wm_mode", label: "Basic behaviour", type: "single", opts: [
+        ["floating", "Normal floating windows, with smarter snapping", "medium"],
+        ["tiling", "Automatic tiling: windows always fill the screen side by side", "hard", "Many apps resist being resized; needs per-app rules and lots of edge cases."],
+        ["hybrid", "Floating by default, tile on demand", "hard", "Per workspace or by hotkey."] ] },
+      { id: "wm_features", label: "Features you'd use", type: "multi", opts: [
+        ["zones", "Custom snap zones / layouts", "medium", "Like FancyZones: drag a window onto a zone."],
+        ["workspaces", "Virtual workspaces", "hard", "Windows' own virtual desktop API is undocumented and changes between builds."],
+        ["keys", "Keyboard control: focus, move, resize", "medium"],
+        ["overview", "Overview of every window (like Mission Control)", "medium", "Live thumbnails come from the Windows compositor."],
+        ["switcher", "Better Alt-Tab", "medium"],
+        ["border", "Coloured border on the active window", "easy", "Built into Windows 11."],
+        ["rules", "App rules (“Discord always opens on monitor 2”)", "medium"],
+        ["gaps", "Gaps between windows", "medium"],
+        ["restore", "Remember window positions after a reboot", "medium"] ] }
+    ] },
+  { id: "desk", title: "Desktop and Fences", intro: "You already organise the desktop with Fences. Decide how the new shell treats it.",
+    qs: [
+      { id: "fences", label: "Fences", type: "single", opts: [
+        ["keep", "Keep using Fences alongside the new shell", "easy"],
+        ["later", "Keep Fences for now, maybe replace it later", "easy"],
+        ["replace", "Build our own desktop sections and drop Fences", "hard", "Fences hooks deep into the desktop; matching it is a project of its own."] ] },
+      { id: "peek", label: "Getting to the desktop", type: "single", opts: [
+        ["hotkey", "Hotkey to peek at the desktop", "easy"],
+        ["corner", "Hot corner to peek at the desktop", "easy"],
+        ["button", "A button on the bar", "easy"],
+        ["none", "I just minimise things", "easy"] ] }
+    ] },
+  { id: "look", title: "Look and feel", intro: "",
+    qs: [
+      { id: "theme", label: "Surface style", type: "single", opts: [
+        ["glass", "Frosted glass, macOS-like", "easy"],
+        ["mica", "Windows 11 Mica, tinted and solid", "easy"],
+        ["flat", "Flat and solid", "easy"] ] },
+      { id: "motion", label: "Animation", type: "single", opts: [
+        ["smooth", "Smooth, noticeable animations", "", ""],
+        ["snappy", "Quick and subtle", "", ""],
+        ["none", "None, instant", "", ""] ] },
+      { id: "config", label: "How do you change settings?", type: "single", opts: [
+        ["ui", "A settings window", "medium"],
+        ["file", "A text config file I edit", "easy"],
+        ["both", "Both", "medium"] ] },
+      { id: "priorities", label: "What matters most? Pick a few", type: "multi", opts: [
+        ["light", "Light on RAM and CPU", "", ""],
+        ["stable", "Never crashes or leaves me with no taskbar", "", ""],
+        ["pretty", "Looks great", "", ""],
+        ["soon", "Something usable soon, polish later", "", ""],
+        ["keyboard", "Everything reachable from the keyboard", "", ""],
+        ["gaming", "Stays out of the way in fullscreen games", "", ""] ] },
+      { id: "notes", label: "Anything else? What annoys you about the current taskbar?", type: "text" }
+    ] }
+];
+
+const DEFAULTS = {
+  bar_pos: "bottom", bar_style: "dock", bar_items: ["pinned", "running", "clock", "media", "cc_button"],
+  monitors: "primary", cc_open: ["button", "hotkey"],
+  cc_tiles: ["wifi", "bt", "volume", "audio_out", "brightness", "media", "dark", "calendar"],
+  cc_custom: "fixed", wm_mode: "floating", wm_features: ["zones", "switcher", "border"],
+  fences: "keep", peek: "hotkey", theme: "glass", motion: "snappy", config: "both",
+  priorities: ["stable", "pretty"], notes: ""
+};
+
+const QINDEX = {};
+SECTIONS.forEach(s => s.qs.forEach(q => { QINDEX[q.id] = q; }));
+let state = JSON.parse(JSON.stringify(DEFAULTS));
+let touched = false;
+
+/* ---------- build the form ---------- */
+const qsEl = document.getElementById("qs");
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+SECTIONS.forEach(sec => {
+  const part = el("section", "part"); part.id = "sec-" + sec.id;
+  const h = el("header"); h.append(el("h2", null, sec.title));
+  if (sec.intro) h.append(el("p", null, sec.intro));
+  part.append(h);
+  sec.qs.forEach(q => {
+    const fs = el("fieldset");
+    if (q.type === "text") {
+      const lab = el("label", null, q.label); lab.htmlFor = "q-" + q.id; lab.style.fontWeight = "600"; lab.style.display = "block"; lab.style.marginBottom = "8px";
+      const ta = el("textarea"); ta.id = "q-" + q.id; ta.placeholder = "e.g. I hate that grouped windows hide which one is which…";
+      ta.addEventListener("input", () => { state[q.id] = ta.value; changed(true); });
+      fs.append(lab, ta); part.append(fs); return;
+    }
+    fs.append(el("legend", null, q.label));
+    fs.append(el("p", "qhint", q.type === "multi" ? "Pick any." : "Pick one."));
+    const grid = el("div", "opts");
+    q.opts.forEach(([v, name, diff, why]) => {
+      const lab = el("label", "opt");
+      const inp = el("input"); inp.type = q.type === "multi" ? "checkbox" : "radio"; inp.name = q.id; inp.value = v; inp.id = "q-" + q.id + "-" + v;
+      inp.addEventListener("change", () => {
+        if (q.type === "multi") {
+          state[q.id] = [...document.querySelectorAll(`input[name="${q.id}"]:checked`)].map(i => i.value);
+        } else state[q.id] = v;
+        changed(true);
+      });
+      const box = el("span", "box");
+      box.append(el("span", "mark"), el("span", "name", name));
+      box.append(diff ? el("span", "chip " + diff, diff) : el("span"));
+      if (why) box.append(el("span", "why", why));
+      lab.append(inp, box); grid.append(lab);
+    });
+    fs.append(grid); part.append(fs);
+  });
+  qsEl.append(part);
+});
+
+function syncInputs() {
+  Object.keys(QINDEX).forEach(id => {
+    const q = QINDEX[id], v = state[id];
+    if (q.type === "text") { const t = document.getElementById("q-" + id); if (t) t.value = v || ""; return; }
+    document.querySelectorAll(`input[name="${id}"]`).forEach(i => {
+      i.checked = q.type === "multi" ? (v || []).includes(i.value) : v === i.value;
+    });
+  });
+}
+
+/* ---------- preview ---------- */
+const desk = document.getElementById("desk");
+let ccOpen = true;
+const APP_COLORS = ["#E2574C", "#4C8DE2", "#E8B53A", "#57B26B", "#9B6BE0", "#3FB8C2"];
+const has = (k, v) => (state[k] || []).includes(v);
+
+function barItems(vertical) {
+  const L = [], C = [], R = [];
+  if (has("bar_items", "launcher")) L.push(`<span class="launch" title="Launcher"></span>`);
+  if (has("bar_items", "workspaces")) L.push(`<span class="ws"><span class="on">1</span><span>2</span><span>3</span></span>`);
+  const apps = [];
+  if (has("bar_items", "pinned")) for (let i = 0; i < 3; i++) apps.push(`<i class="app" style="background:${APP_COLORS[i]}"></i>`);
+  if (has("bar_items", "running")) for (let i = 3; i < 6; i++) apps.push(`<i class="app run" style="background:${APP_COLORS[i]}"></i>`);
+  if (apps.length) C.push(`<span class="grp">${apps.join("")}</span>`);
+  if (has("bar_items", "media")) R.push(`<span class="txt">${vertical ? "▶" : "▶ Lo-fi beats"}</span>`);
+  if (has("bar_items", "weather")) R.push(`<span class="txt dim">18°</span>`);
+  if (has("bar_items", "stats")) R.push(`<span class="txt dim">${vertical ? "9%" : "CPU 9%"}</span>`);
+  if (has("bar_items", "tray")) R.push(`<span class="tray"><i></i><i></i><i></i></span>`);
+  if (has("bar_items", "clock")) R.push(`<span class="txt">${vertical ? "14<br>32" : "14:32"}</span>`);
+  if (has("bar_items", "cc_button")) R.push(`<span class="ccbtn" title="Control center"><i></i><i></i></span>`);
+  return { L, C, R };
+}
+
+function tileHTML(t) {
+  const T = {
+    wifi: `<div class="t on"><span class="dot"></span><span class="lbl">Wi-Fi<br><span class="sub">HomeNet</span></span></div>`,
+    bt: `<div class="t on"><span class="dot"></span><span class="lbl">Bluetooth<br><span class="sub">2 devices</span></span></div>`,
+    dnd: `<div class="t"><span class="dot"></span><span class="lbl">Focus<br><span class="sub">Off</span></span></div>`,
+    night: `<div class="t"><span class="dot"></span><span class="lbl">Night light</span></div>`,
+    dark: `<div class="t on"><span class="dot"></span><span class="lbl">Dark mode</span></div>`,
+    battery: `<div class="t"><span class="dot"></span><span class="lbl">Battery<br><span class="sub">82%</span></span></div>`,
+    screenshot: `<div class="t"><span class="dot"></span><span class="lbl">Snip</span></div>`,
+    clipboard: `<div class="t"><span class="dot"></span><span class="lbl">Clipboard</span></div>`,
+    power: `<div class="t"><span class="dot"></span><span class="lbl">Power</span></div>`,
+    layout: `<div class="t"><span class="dot"></span><span class="lbl">Layout<br><span class="sub">2 columns</span></span></div>`,
+    volume: `<div class="t w4"><span class="lbl">Volume</span><span class="slider" style="--v:64%"></span></div>`,
+    brightness: `<div class="t w4"><span class="lbl">Brightness</span><span class="slider" style="--v:80%"></span></div>`,
+    audio_out: `<div class="t w2"><span class="lbl">Output</span><span class="sub">Headset ▾</span></div>`,
+    media: `<div class="t w2"><span class="lbl">Lo-fi beats</span><span class="sub">⏮ ⏸ ⏭</span></div>`,
+    calendar: (() => { let d = ""; for (let i = 1; i <= 21; i++) d += `<span${i === 19 ? ' class="today"' : ""}>${i}</span>`; return `<div class="t w2"><span class="lbl">October</span><span class="cal">${d}</span></div>`; })(),
+    notifications: `<div class="t w4"><span class="lbl">Notifications</span><span class="note">Discord: new message</span><span class="note">Steam: download finished</span></div>`
+  };
+  return T[t] || "";
+}
+
+function renderPreview() {
+  const pos = state.bar_pos, style = state.bar_style, vertical = pos === "left" || pos === "right";
+  desk.className = "desk theme-" + state.theme;
+  const reserve = pos !== "none" && (style === "full" || style === "split");
+  const T = vertical ? 0 : 7.5;            // bar thickness in % of height
+  const W = vertical ? 5.2 : 0;             // bar thickness in % of width
+  const area = { t: 0, b: 0, l: 0, r: 0 };
+  if (reserve) { if (pos === "bottom") area.b = T; if (pos === "top") area.t = T; if (pos === "left") area.l = W; if (pos === "right") area.r = W; }
+
+  let html = "";
+  // fences
+  const fenceTitle = state.fences === "replace" ? ["Games", "Projects", "Tools"] : ["Games", "Projects", "Tools"];
+  const fx = 2 + area.l, fy = 3 + area.t;
+  fenceTitle.forEach((name, i) => {
+    let icons = ""; for (let k = 0; k < 6; k++) icons += `<i style="background:${APP_COLORS[(k + i * 2) % 6]};opacity:.85"></i>`;
+    html += `<div class="fence" style="left:${fx}%;top:${fy + i * 27}%"><b>${name}</b><div class="icons">${icons}</div></div>`;
+  });
+
+  // windows
+  const g = has("wm_features", "gaps") ? 1.2 : 0;
+  const x0 = area.l + g, y0 = area.t + g * 1.6, x1 = 100 - area.r - g, y1 = 100 - area.b - g * 1.6;
+  const bordered = has("wm_features", "border") ? " bordered" : "";
+  const win = (cls, x, y, w, h, title) => `<div class="win${cls}${bordered}" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%"><div class="tb">${title}</div><div class="ln" style="width:60%"></div><div class="ln" style="width:80%"></div><div class="ln" style="width:45%"></div></div>`;
+  if (state.wm_mode === "floating") {
+    html += win("", 26, 12 + area.t * .5, 44, 50, "Browser");
+    html += win(" active", 44, 30 + area.t * .5 - area.b * .4, 40, 44, "Code editor");
+  } else {
+    const mid = x0 + (x1 - x0) * .58;
+    html += win(" active", x0, y0, mid - x0 - g / 2, y1 - y0, "Code editor");
+    const sx = mid + g / 2, sh = (y1 - y0 - g * 1.6) / 2;
+    html += win("", sx, y0, x1 - sx, sh, "Browser");
+    html += win("", sx, y0 + sh + g * 1.6, x1 - sx, sh, "Discord");
+    if (state.wm_mode === "hybrid") html += win(" float-tag", 30, 34, 30, 34, "Calculator");
+  }
+
+  // bar
+  let barBox = null;
+  if (pos !== "none") {
+    const { L, C, R } = barItems(vertical);
+    const dir = vertical ? "v" : "h";
+    let posCss = "";
+    if (style === "full" || style === "split") {
+      const inset = style === "split" ? 1 : 0;
+      if (pos === "bottom") posCss = `left:${inset}%;right:${inset}%;bottom:${inset ? 1.2 : 0}%;height:${T - (inset ? 1.8 : 0)}%`;
+      if (pos === "top") posCss = `left:${inset}%;right:${inset}%;top:${inset ? 1.2 : 0}%;height:${T - (inset ? 1.8 : 0)}%`;
+      if (pos === "left") posCss = `top:${inset * 1.6}%;bottom:${inset * 1.6}%;left:${inset ? .6 : 0}%;width:${W - (inset ? 1 : 0)}%`;
+      if (pos === "right") posCss = `top:${inset * 1.6}%;bottom:${inset * 1.6}%;right:${inset ? .6 : 0}%;width:${W - (inset ? 1 : 0)}%`;
+    } else {
+      if (pos === "bottom") posCss = `left:50%;transform:translateX(-50%);bottom:2%`;
+      if (pos === "top") posCss = `left:50%;transform:translateX(-50%);top:2%`;
+      if (pos === "left") posCss = `top:50%;transform:translateY(-50%);left:1%`;
+      if (pos === "right") posCss = `top:50%;transform:translateY(-50%);right:1%`;
+    }
+    const join = a => a.join("");
+    if (style === "full") {
+      html += `<div class="bar full surface ${dir}" style="${posCss}"><span class="grp">${join(L)}</span><span class="grp">${join(C)}</span><span class="grp">${join(R)}</span></div>`;
+    } else if (style === "split") {
+      const pill = a => a.length ? `<span class="pill surface grp">${join(a)}</span>` : `<span></span>`;
+      html += `<div class="bar split ${dir}" style="${posCss}">${pill(L)}${pill(C)}${pill(R)}</div>`;
+    } else {
+      const ghost = style === "autohide" ? " ghost" : "";
+      const all = [...L, ...C, ...R];
+      html += `<div class="bar dock surface ${dir}${ghost}" style="${posCss}">${all.join("") || '<span class="txt dim">empty</span>'}</div>`;
+      if (style === "autohide") {
+        const line = { bottom: "left:30%;right:30%;bottom:0;height:.6%", top: "left:30%;right:30%;top:0;height:.6%", left: "top:30%;bottom:30%;left:0;width:.4%", right: "top:30%;bottom:30%;right:0;width:.4%" }[pos];
+        html += `<div class="edge-line" style="${line}"></div>`;
+      }
+    }
+  }
+
+  // control center
+  if (ccOpen) {
+    const tiles = (state.cc_tiles || []);
+    const order = ["wifi", "bt", "dnd", "dark", "night", "battery", "screenshot", "clipboard", "power", "layout", "volume", "brightness", "audio_out", "media", "calendar", "notifications"];
+    const body = order.filter(t => tiles.includes(t)).map(tileHTML).join("") || `<div class="t w4"><span class="sub">No tiles picked yet</span></div>`;
+    const gap = 1.5;
+    let cpos;
+    if (pos === "bottom") cpos = `right:${gap}%;bottom:${(reserve ? T : 10) + gap}%`;
+    else if (pos === "top") cpos = `right:${gap}%;top:${(reserve ? T : 10) + gap}%`;
+    else if (pos === "left") cpos = `left:${(reserve ? W : 7) + gap}%;bottom:${gap * 1.6}%`;
+    else if (pos === "right") cpos = `right:${(reserve ? W : 7) + gap}%;bottom:${gap * 1.6}%`;
+    else cpos = `right:${gap}%;top:${gap * 1.6}%`;
+    html += `<div class="cc surface" style="${cpos}">${body}</div>`;
+  }
+  desk.innerHTML = html;
+
+  const cap = [];
+  if (state.bar_style === "autohide" && pos !== "none") cap.push("Dashed bar = hidden until the mouse reaches the highlighted edge.");
+  if (pos === "none") cap.push("No bar: everything lives in the control center.");
+  if (state.wm_mode !== "floating") cap.push(state.wm_mode === "hybrid" ? "Tiled windows, with one floating on top." : "Tiled windows cover the desktop, so you'd peek at Fences with a hotkey or corner.");
+  document.getElementById("pvCap").textContent = cap.join(" ") || "Fences stay on the desktop behind your windows.";
+}
+
+document.getElementById("ccToggle").addEventListener("click", e => {
+  ccOpen = !ccOpen; e.currentTarget.setAttribute("aria-pressed", String(ccOpen));
+  e.currentTarget.textContent = ccOpen ? "Control center open" : "Control center closed";
+  renderPreview();
+});
+
+/* ---------- summary ---------- */
+function names(id) {
+  const q = QINDEX[id], v = state[id];
+  const pick = val => (q.opts.find(o => o[0] === val) || [, val])[1];
+  if (q.type === "multi") return (v || []).length ? v.map(pick).join(", ") : "(none)";
+  return v ? pick(v) : "(not set)";
+}
+function renderSummary() {
+  const lines = [
+    "DESKTOP SHELL SPEC",
+    "",
+    "Bar        " + names("bar_pos") + " / " + names("bar_style"),
+    "On the bar " + names("bar_items"),
+    "Monitors   " + names("monitors"),
+    "",
+    "Control center opens by  " + names("cc_open"),
+    "Tiles      " + names("cc_tiles"),
+    "Layout     " + names("cc_custom"),
+    "",
+    "Windows    " + names("wm_mode"),
+    "WM extras  " + names("wm_features"),
+    "",
+    "Fences     " + names("fences"),
+    "Desktop    " + names("peek"),
+    "",
+    "Style      " + names("theme") + " / " + names("motion"),
+    "Settings   " + names("config"),
+    "Priorities " + names("priorities")
+  ];
+  if ((state.notes || "").trim()) lines.push("", "Notes", state.notes.trim());
+  document.getElementById("spec").textContent = lines.join("\n");
+
+  const n = { easy: 0, medium: 0, hard: 0 };
+  Object.keys(QINDEX).forEach(id => {
+    const q = QINDEX[id]; if (!q.opts) return;
+    const vals = q.type === "multi" ? (state[id] || []) : [state[id]];
+    vals.forEach(v => { const o = q.opts.find(o => o[0] === v); if (o && n[o[2]] != null) n[o[2]]++; });
+  });
+  document.getElementById("tally").innerHTML =
+    `<span class="chip easy">${n.easy} easy</span><span class="chip medium">${n.medium} medium</span><span class="chip hard">${n.hard} hard</span>`;
+}
+
+document.getElementById("copyBtn").addEventListener("click", async () => {
+  const txt = document.getElementById("spec").textContent, b = document.getElementById("copyBtn");
+  try { await navigator.clipboard.writeText(txt); b.textContent = "Copied"; }
+  catch { const r = document.createRange(); r.selectNodeContents(document.getElementById("spec")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = "Selected, press Ctrl+C"; }
+  setTimeout(() => { b.textContent = "Copy spec"; }, 1800);
+});
+
+/* ---------- saving ---------- */
+const saveEl = document.getElementById("saveState");
+let db = null, saveTimer = null, saving = false, pending = false;
+function setSave(text, cls) { saveEl.textContent = text; saveEl.className = "st " + (cls || ""); }
+function local(write) {
+  try { if (write) localStorage.setItem("shellSpec", JSON.stringify(state)); else return JSON.parse(localStorage.getItem("shellSpec") || "null"); } catch { return null; }
+}
+async function flush() {
+  if (!db) { setSave("Saved in this browser only. Use Copy spec to share it.", "ok"); return; }
+  if (saving) { pending = true; return; }
+  saving = true; setSave("Saving…", "busy");
+  try {
+    await db.doc("spec/current").set({ answers: state, updatedAt: new Date().toISOString() });
+    setSave("Saved. Claude can read your answers.", "ok");
+  } catch (e) {
+    setSave(e && e.code === "invalid_argument" ? "View-only: copy the spec instead." : "Couldn't save just now. Use Copy spec.", "");
+  }
+  saving = false;
+  if (pending) { pending = false; flush(); }
+}
+function changed(user) {
+  renderPreview(); renderSummary();
+  if (!user) return;
+  touched = true; local(true);
+  clearTimeout(saveTimer); setSave("Unsaved changes", "busy");
+  saveTimer = setTimeout(flush, 900);
+}
+
+/* ---------- boot ---------- */
+const stored = local(false);
+if (stored) state = Object.assign({}, DEFAULTS, stored);
+syncInputs(); changed(false);
+
+(async () => {
+  try { db = window.claude && window.claude.use ? await window.claude.use("db") : null; } catch { db = null; }
+  if (!db) { if (stored) setSave("Saved in this browser only. Use Copy spec to share it.", "ok"); return; }
+  try {
+    const snap = await db.doc("spec/current").get();
+    if (snap.exists && !touched) {
+      const a = snap.data().answers || {};
+      state = Object.assign({}, DEFAULTS, a);
+      syncInputs(); changed(false);
+      setSave("Loaded your saved answers.", "ok");
+    } else if (!touched) setSave("Change anything and it saves automatically.", "");
+  } catch { setSave("Couldn't load saved answers. Changes still save.", ""); }
+})();
+</script>

@@ -1,0 +1,25 @@
+<appbar:AppBarWindow x:Class="DeskShell.DockWindow"
+                     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                     xmlns:appbar="clr-namespace:ManagedShell.AppBar;assembly=ManagedShell.AppBar"
+                     Title="DeskShell Dock"
+                     WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+                     ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
+                     UseLayoutRounding="True" FontFamily="{StaticResource UiFont}"
+                     Foreground="{StaticResource TextBrush}">
+    <Grid>
+        <Border x:Name="Pill" HorizontalAlignment="Center" VerticalAlignment="Center"
+                Height="52" CornerRadius="17" Padding="6,0"
+                Background="{StaticResource DockBrush}" BorderBrush="{StaticResource EdgeBrush}" BorderThickness="1">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="ShellButton" Style="{StaticResource GhostButton}" Width="40" Height="40"
+                        ToolTip="Open shell" Click="ShellButton_Click">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE71D;" FontSize="17" />
+                </Button>
+                <Rectangle x:Name="Divider" Width="1" Margin="6,12" Fill="{StaticResource EdgeBrush}" />
+                <ItemsControl x:Name="WindowList" ItemTemplate="{StaticResource TaskTemplate}"
+                              ItemsPanel="{StaticResource HorizontalPanel}" VerticalAlignment="Center" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</appbar:AppBarWindow>
