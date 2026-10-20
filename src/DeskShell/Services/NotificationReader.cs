@@ -17,30 +17,82 @@ internal static class NotificationReader
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Microsoft\Windows\Notifications");
     static readonly string Copy = Path.Combine(Path.GetTempPath(), "DeskShell", "wpn");
 
+    static readonly object Gate = new();
+
+    /// <summary>Copies Windows' notification database (it's in use) and opens the copy.</summary>
+    static SqliteConnection OpenCopy()
+    {
+        Directory.CreateDirectory(Copy);
+        foreach (var name in new[] { "wpndatabase.db", "wpndatabase.db-wal", "wpndatabase.db-shm" })
+        {
+            var from = Path.Combine(Source, name);
+            var to = Path.Combine(Copy, name);
+            if (File.Exists(from))
+            {
+                using var src = new FileStream(from, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var dst = new FileStream(to, FileMode.Create, FileAccess.Write);
+                src.CopyTo(dst);
+            }
+            else if (File.Exists(to))
+            {
+                File.Delete(to);
+            }
+        }
+
+        var db = new SqliteConnection($"Data Source={Path.Combine(Copy, "wpndatabase.db")};Pooling=False");
+        db.Open();
+        return db;
+    }
+
+    /// <summary>
+    /// Store apps' taskbar badges (e.g. Xbox "13"), keyed by app id. Values are a number, or a
+    /// word such as "alert" or "newMessage" for apps that show a symbol instead.
+    /// </summary>
+    public static Task<Dictionary<string, string>> ReadBadgesAsync() => Task.Run(() =>
+    {
+        var badges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        lock (Gate)
+        {
+            try
+            {
+                using var db = OpenCopy();
+                using var cmd = db.CreateCommand();
+                cmd.CommandText = """
+                    SELECT h.PrimaryId, n.Payload
+                    FROM Notification n JOIN NotificationHandler h ON h.RecordId = n.HandlerId
+                    WHERE n.Type = 'badge'
+                    """;
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    if (reader.IsDBNull(0) || reader.IsDBNull(1)) continue;
+                    try
+                    {
+                        var value = XDocument.Parse(PayloadText(reader.GetValue(1))).Root?.Attribute("value")?.Value;
+                        if (!string.IsNullOrEmpty(value) && value != "none" && value != "0")
+                            badges[reader.GetString(0)] = value;
+                    }
+                    catch
+                    {
+                        // not a badge we understand
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Could not read app badges", ex);
+            }
+        }
+        return badges;
+    });
+
     public static Task<List<ToastItem>> ReadAsync(int max = 20) => Task.Run(() =>
     {
         var items = new List<ToastItem>();
+        lock (Gate)
         try
         {
-            Directory.CreateDirectory(Copy);
-            foreach (var name in new[] { "wpndatabase.db", "wpndatabase.db-wal", "wpndatabase.db-shm" })
-            {
-                var from = Path.Combine(Source, name);
-                var to = Path.Combine(Copy, name);
-                if (File.Exists(from))
-                {
-                    using var src = new FileStream(from, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                    using var dst = new FileStream(to, FileMode.Create, FileAccess.Write);
-                    src.CopyTo(dst);
-                }
-                else if (File.Exists(to))
-                {
-                    File.Delete(to);
-                }
-            }
-
-            using var db = new SqliteConnection($"Data Source={Path.Combine(Copy, "wpndatabase.db")};Pooling=False");
-            db.Open();
+            using var db = OpenCopy();
             using var cmd = db.CreateCommand();
             cmd.CommandText = """
                 SELECT h.PrimaryId, n.Payload, n.ArrivalTime

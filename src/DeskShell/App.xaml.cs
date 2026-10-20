@@ -130,6 +130,7 @@ public partial class App : Application
         _clipboard = new ClipboardHistory();
         _shellWindow = new ShellWindow(Shell, apps, _clipboard);
 
+        BadgeService.Instance.Start(Shell);
         RegisterHotkeys();
         StartupRegistration.Apply(Settings.StartWithWindows);
         TrimMemorySoon(TimeSpan.FromSeconds(15));
@@ -305,6 +306,7 @@ public partial class App : Application
         {
             SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
             _hotkeys?.Dispose();
+            BadgeService.Instance.Stop();
             _altTab?.Dispose();
             _events?.Dispose();
             _border?.Reset();

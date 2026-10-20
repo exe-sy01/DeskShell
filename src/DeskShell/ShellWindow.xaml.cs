@@ -79,6 +79,7 @@ public partial class ShellWindow : Window
         UpdateClock();
         SearchBox.Text = "";
         foreach (var host in Hosts) SafeCall(host.Tile.OnOpened);
+        _ = BadgeService.Instance.RefreshAsync();
         WindowStrip.Visibility = AllWindows.HasItems ? Visibility.Visible : Visibility.Collapsed;
 
         Backdrop.Opacity = 0;
