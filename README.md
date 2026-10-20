@@ -14,6 +14,8 @@ Or run from source: `dotnet run --project src/DeskShell`.
 
 **Getting the normal taskbar back:** `Ctrl+Alt+Shift+Q` or the ✕ in the shell. If DeskShell crashes or is killed, a small watchdog process restores the taskbar automatically.
 
+DeskShell never changes the Windows taskbar's settings (such as auto-hide). It only hides the taskbar window and reserves a strip at the bottom of each screen for the dock, and gives both back when it quits.
+
 ## What's in it
 
 **Dock** (bottom of every monitor): that monitor's open windows with icons and names. Click to switch, click again to minimise, right-click to close. Hides while a fullscreen game runs. The button on the left opens the shell.
@@ -49,6 +51,8 @@ Plus Lock / Sleep / Restart / Shut down (restart and shut down need a second cli
 ## Settings
 
 The gear in the shell opens the settings window. Everything is also in `%APPDATA%\DeskShell\settings.json`. Window positions are kept in `window-positions.json` next to it. Log: `%LOCALAPPDATA%\DeskShell\deskshell.log`.
+
+For bug hunting, create an empty file named `debug` in `%LOCALAPPDATA%\DeskShell` and restart DeskShell: ManagedShell's detailed log then goes to `managedshell.log` there. Delete the file when done (that log grows quickly).
 
 "Start DeskShell when I sign in" is off until you turn it on.
 

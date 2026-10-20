@@ -16,7 +16,9 @@ public partial class DockWindow : AppBarWindow
     readonly ICollectionView? _windows;
 
     public DockWindow(ShellManager shell, AppBarScreen screen, double height)
-        : base(shell.AppBarManager, shell.ExplorerHelper, shell.FullScreenHelper, screen, AppBarEdge.Bottom, AppBarMode.Normal, height)
+        // AppBarMode.None: the dock floats instead of registering as an app bar; WorkAreaReserver
+        // keeps its strip free. (Registering made Explorer's hidden taskbar flicker on startup.)
+        : base(shell.AppBarManager, shell.ExplorerHelper, shell.FullScreenHelper, screen, AppBarEdge.Bottom, AppBarMode.None, height)
     {
         InitializeComponent();
 

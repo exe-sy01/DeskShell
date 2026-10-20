@@ -24,6 +24,8 @@ public partial class App : Application
     ShellWindow? _shellWindow;
     SettingsWindow? _settingsWindow;
     HotkeyManager? _hotkeys;
+    TaskbarHider? _hider;
+    WorkAreaReserver? _workArea;
     WindowEvents? _events;
     ActiveBorder? _border;
     WindowPlacer? _placer;
@@ -63,6 +65,16 @@ public partial class App : Application
 
         base.OnStartup(e);
         Log.Info("Starting DeskShell");
+
+        // Creating %LOCALAPPDATA%\DeskShell\debug turns on ManagedShell's detailed log, for bug hunting.
+        var logFolder = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DeskShell");
+        if (System.IO.File.Exists(System.IO.Path.Combine(logFolder, "debug")))
+        {
+            var fileLog = new ManagedShell.Common.Logging.Observers.FileLog(System.IO.Path.Combine(logFolder, "managedshell.log"));
+            fileLog.Open();
+            ManagedShell.Common.Logging.ShellLogger.Severity = ManagedShell.Common.Logging.LogSeverity.Debug;
+            ManagedShell.Common.Logging.ShellLogger.Attach(fileLog, false);
+        }
         Settings = Settings.Load();
 
         var config = ShellManager.DefaultShellConfig;
@@ -74,8 +86,20 @@ public partial class App : Application
         config.AutoStartTrayService = true;
         Shell = new ShellManager(config);
 
-        TaskbarGuard.Arm(Shell.ExplorerHelper);
-        Shell.ExplorerHelper.HideExplorerTaskbar = true;
+        TaskbarGuard.Arm();
+        _hider = new TaskbarHider();
+        _ = FinishStartupAsync();
+    }
+
+    /// <summary>
+    /// The rest of startup runs once the screen layout has settled after hiding the taskbar,
+    /// so the docks don't claim screen space while it is still changing.
+    /// </summary>
+    async Task FinishStartupAsync()
+    {
+        _hider!.Start();
+        await WaitForWorkAreaToSettle();
+        if (_quitting) return;
 
         CreateDocks();
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
@@ -110,6 +134,39 @@ public partial class App : Application
         StartupRegistration.Apply(Settings.StartWithWindows);
         TrimMemorySoon(TimeSpan.FromSeconds(15));
     }
+
+    static async Task WaitForWorkAreaToSettle()
+    {
+        var started = Environment.TickCount64;
+        var last = WorkArea();
+        var stableSince = Environment.TickCount64;
+        while (Environment.TickCount64 - started < 2500)
+        {
+            await Task.Delay(100);
+            var now = WorkArea();
+            if (now != last)
+            {
+                last = now;
+                stableSince = Environment.TickCount64;
+            }
+            else if (Environment.TickCount64 - stableSince >= 400 && Environment.TickCount64 - started >= 300)
+            {
+                break;
+            }
+        }
+    }
+
+    static (int, int, int, int) WorkArea()
+    {
+        SystemParametersInfo(0x0030 /* SPI_GETWORKAREA */, 0, out var r, 0);
+        return (r.Left, r.Top, r.Right, r.Bottom);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct RECT { public int Left, Top, Right, Bottom; }
+
+    [DllImport("user32.dll")]
+    static extern bool SystemParametersInfo(int action, int param, out RECT result, int winIni);
 
     void RegisterHotkeys()
     {
@@ -166,6 +223,9 @@ public partial class App : Application
             dock.Show();
             _docks.Add(dock);
         }
+
+        _workArea ??= new WorkAreaReserver();
+        _workArea.Reserve(screens, Settings.DockHeight);
     }
 
     void CloseDocks()
@@ -190,7 +250,6 @@ public partial class App : Application
                 Log.Info("Display setup changed; rebuilding docks");
                 CloseDocks();
                 CreateDocks();
-                Shell.ExplorerHelper.HideExplorerTaskbar = true;
             }, Dispatcher);
             _displayDebounce.Stop();
             _displayDebounce.Start();
@@ -258,7 +317,10 @@ public partial class App : Application
             _shellWindow?.ForceClose();
             CloseDocks();
             Shell.AppBarManager.SignalGracefulShutdown();
-            Shell.ExplorerHelper.HideExplorerTaskbar = false;
+            _hider?.Stop();
+            // After Explorer's taskbar is back, so Explorer reclaims its space when it recalculates.
+            _workArea?.Release();
+            _workArea?.Dispose();
             Shell.Dispose();
             TaskbarGuard.Disarm();
         }
