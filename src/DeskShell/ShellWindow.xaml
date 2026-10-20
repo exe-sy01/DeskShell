@@ -10,12 +10,21 @@
         PreviewKeyDown="Window_PreviewKeyDown">
 
     <Grid x:Name="Backdrop" Background="{DynamicResource DimBrush}" Opacity="0" MouseLeftButtonDown="Backdrop_MouseLeftButtonDown">
-        <StackPanel x:Name="ShellPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Width="1000" RenderTransformOrigin="0.5,0.5">
-            <StackPanel.RenderTransform>
+        <Grid x:Name="ShellPanel" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+            <Grid.RenderTransform>
                 <ScaleTransform x:Name="ContentScale" ScaleX="1" ScaleY="1" />
-            </StackPanel.RenderTransform>
+            </Grid.RenderTransform>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-            <Border Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource EdgeBrush}" BorderThickness="1" CornerRadius="8" Padding="24,20,24,20">
+            <Border x:Name="Card" Width="1000" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource EdgeBrush}" BorderThickness="1" CornerRadius="8" Padding="24,20,24,20">
                 <StackPanel>
                     <!-- Time and search -->
                     <Grid Margin="0,0,0,18">
@@ -86,19 +95,10 @@
                 </StackPanel>
             </Border>
 
-            <!-- Every open window, on all monitors -->
-            <Border x:Name="WindowStrip" HorizontalAlignment="Center" Margin="0,14,0,0" CornerRadius="8" Padding="6"
-                    Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource EdgeBrush}" BorderThickness="1">
-                <ItemsControl x:Name="AllWindows" ItemTemplate="{StaticResource TaskTemplate}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel HorizontalAlignment="Center" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                </ItemsControl>
-            </Border>
+            <!-- Every open window: per monitor, grouped by app, as preview cards (WindowBoard) -->
+            <ContentControl x:Name="WindowHost" Grid.Row="1" Margin="0,14,0,0" Focusable="False" />
 
-            <TextBlock x:Name="HintText" HorizontalAlignment="Center" Margin="0,12,0,0" Foreground="White" Opacity="0.75" FontSize="12" />
-        </StackPanel>
+            <TextBlock x:Name="HintText" Grid.Row="2" Grid.ColumnSpan="2" HorizontalAlignment="Center" Margin="0,12,0,0" Foreground="White" Opacity="0.75" FontSize="12" />
+        </Grid>
     </Grid>
 </Window>

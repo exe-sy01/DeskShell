@@ -48,7 +48,9 @@ DeskShell doesn't include its own file manager; it's set up alongside [Files](ht
 | Notifications | Read-only copy of Windows' recent notifications |
 | Background apps | Your tray icons |
 
-Plus Lock / Sleep / Restart / Shut down (restart and shut down need a second click), and a strip of every open window.
+Plus Lock / Sleep / Restart / Shut down (restart and shut down need a second click).
+
+**Open windows** fill the rest of the screen beside the panel (underneath it on narrow screens): a column per monitor, windows grouped by app, each as a preview card with its full title. The window you were using is outlined. Click to switch, hover for ×, middle-click to close, right-click for Pin to dock / Minimise / Close.
 
 **Games**
 - The *Games* tile lists every installed game with box art where the launcher has it: Steam (all libraries), Epic, the Xbox app / Game Pass, and games registered by Battle.net, Ubisoft, EA, Riot and Rockstar. Click to play; games also show up in shell search.

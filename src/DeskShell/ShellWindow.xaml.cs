@@ -23,6 +23,7 @@ namespace DeskShell;
 public partial class ShellWindow : Window
 {
     readonly ShellContext _context;
+    readonly WindowBoard _board;
     readonly DispatcherTimer _clock;
     bool _forceClose;
     bool _editing;
@@ -52,7 +53,8 @@ public partial class ShellWindow : Window
         _ = media.StartAsync();
         _ = toggles.StartAsync();
 
-        AllWindows.ItemsSource = shell.Tasks.GroupedWindows;
+        _board = new WindowBoard(shell, apps);
+        WindowHost.Content = _board;
         BuildTiles();
         UpdateHint();
 
@@ -80,7 +82,7 @@ public partial class ShellWindow : Window
         SearchBox.Text = "";
         foreach (var host in Hosts) SafeCall(host.Tile.OnOpened);
         _ = BadgeService.Instance.RefreshAsync();
-        WindowStrip.Visibility = AllWindows.HasItems ? Visibility.Visible : Visibility.Collapsed;
+        _board.Open(WmNative.GetForegroundWindow());
 
         Backdrop.Opacity = 0;
         Show();
@@ -89,6 +91,7 @@ public partial class ShellWindow : Window
         // Twice: the first move may land on a monitor with a different scale and trigger a DPI resize.
         for (var i = 0; i < 2; i++)
             Native.SetWindowPos(hwnd, Native.HWND_TOPMOST, b.X, b.Y, b.Width, b.Height, Native.SWP_SHOWWINDOW);
+        FitToScreen();
 
         Activate();
         Native.SetForegroundWindow(hwnd);
@@ -158,6 +161,57 @@ public partial class ShellWindow : Window
         return (style & WS_CAPTION) == WS_CAPTION && (exStyle & WmNative.WS_EX_TOOLWINDOW) == 0;
     }
 
+    /// <summary>
+    /// Keeps everything on screen: the window list gets whatever height is left under the panel
+    /// (and scrolls beyond that); if even the panel is too tall for this screen, everything shrinks.
+    /// </summary>
+    void FitToScreen()
+    {
+        const double sideGap = 14, sideMin = 560;
+        ShellPanel.LayoutTransform = Transform.Identity;
+        // Keep clear of the dock at the bottom.
+        var availableHeight = ActualHeight - App.Settings.DockHeight - 40;
+        var availableWidth = ActualWidth - 80;
+
+        // Wide screens: use the whole width. The panel sits on the left and the window board fills
+        // everything to its right, at the panel's height. Narrower screens: the board goes underneath.
+        var sideWidth = availableWidth - Card.Width - sideGap;
+        if (sideWidth >= sideMin)
+        {
+            ShellPanel.HorizontalAlignment = HorizontalAlignment.Stretch;
+            ShellPanel.Margin = new Thickness(40, 0, 40, 0);
+            ShellPanel.ColumnDefinitions[1].Width = new GridLength(1, GridUnitType.Star);
+            Grid.SetRow(WindowHost, 0);
+            Grid.SetColumn(WindowHost, 1);
+            WindowHost.Margin = new Thickness(sideGap, 0, 0, 0);
+            WindowHost.Width = double.NaN;
+            WindowHost.VerticalAlignment = VerticalAlignment.Stretch;
+            _board.VerticalAlignment = VerticalAlignment.Stretch;
+            UpdateLayout();
+            _board.MaxListHeight = Math.Max(170, Card.ActualHeight - _board.Padding.Top - _board.Padding.Bottom - 2);
+        }
+        else
+        {
+            ShellPanel.HorizontalAlignment = HorizontalAlignment.Center;
+            ShellPanel.Margin = new Thickness(0);
+            ShellPanel.ColumnDefinitions[1].Width = GridLength.Auto;
+            Grid.SetRow(WindowHost, 1);
+            Grid.SetColumn(WindowHost, 0);
+            WindowHost.Margin = new Thickness(0, 14, 0, 0);
+            WindowHost.Width = Card.Width;
+            WindowHost.VerticalAlignment = VerticalAlignment.Top;
+            _board.VerticalAlignment = VerticalAlignment.Top;
+            UpdateLayout();
+            var hint = HintText.ActualHeight + HintText.Margin.Top;
+            _board.MaxListHeight = Math.Max(170, availableHeight - Card.ActualHeight - WindowHost.Margin.Top - hint - 24);
+        }
+
+        // If it still doesn't fit (small screens), shrink everything to fit.
+        UpdateLayout();
+        var scale = Math.Min(1, Math.Min(availableHeight / ShellPanel.ActualHeight, ActualWidth / (ShellPanel.ActualWidth + 40)));
+        if (scale < 1 && scale > 0) ShellPanel.LayoutTransform = new ScaleTransform(scale, scale);
+    }
+
     public void CloseShell(bool immediate = false)
     {
         if (!IsOpen) return;
@@ -166,6 +220,7 @@ public partial class ShellWindow : Window
         _clock.Stop();
         if (_editing) SetEditing(false);
         foreach (var host in Hosts) SafeCall(host.Tile.OnClosed);
+        _board.Close();
         App.Instance.TrimMemorySoon();
 
         if (immediate)
