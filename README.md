@@ -2,15 +2,20 @@
 
 A replacement for the Windows taskbar: a slim window dock, a centered shell panel, and a window manager. Fences keeps working alongside it.
 
-## Run it
+## Install it
 
-Built copy: `dist\DeskShell.exe` (needs the .NET 10 desktop runtime). To rebuild it:
+Needs the .NET 10 desktop runtime. Build it, then install:
 
 ```
-dotnet publish src/DeskShell -c Release -r win-x64 --self-contained false -o dist
+.\build-release.ps1
+dist\DeskShell.exe --install
 ```
 
-Or run from source: `dotnet run --project src/DeskShell`.
+This copies DeskShell to `%LOCALAPPDATA%\Programs\DeskShell` (no admin needed) and adds it to the Start menu and to Settings → Apps → Installed apps, where you can uninstall it. Settings → *Install DeskShell* does the same from a running copy. Uninstalling keeps your settings in `%APPDATA%\DeskShell`.
+
+Or run from source without installing: `dotnet run --project src/DeskShell`.
+
+**Updates:** put a GitHub repository (`owner/name`) in Settings → *Update from GitHub repo*. DeskShell checks its latest release once a day; when a release tagged with a newer version (e.g. `v1.1.0`) has a `.zip` attached, an *Update* button appears in the shell. It downloads the zip, quits DeskShell, installs the new version and starts it. To publish one: bump `<Version>` in `src/DeskShell/DeskShell.csproj`, run `build-release.ps1`, and attach `release\DeskShell-<version>.zip` to a release tagged `v<version>`. With no repository set, nothing is checked.
 
 **Getting the normal taskbar back:** `Ctrl+Alt+Shift+Q` or the ✕ in the shell. If DeskShell crashes or is killed, a small watchdog process restores the taskbar automatically.
 
@@ -39,6 +44,7 @@ DeskShell doesn't include its own file manager; it's set up alongside [Files](ht
 | Do not disturb | Uses Windows 11 Focus, which turns on Do Not Disturb |
 | Dark mode | Switches Windows light/dark |
 | Volume, Sound output | Output switches the default device for everything |
+| Mixer | One row per output: Voicemeeter's VAIO, AUX and VAIO3 (their Voicemeeter faders) and any other device apps play through (its Windows volume). Right-click an output to show its apps, each with its own volume. Below: Voicemeeter's A/B outputs |
 | Brightness | Laptop screens, and external monitors that support DDC/CI |
 | Now playing | Whatever Windows sees playing (Spotify, browsers…) |
 | CPU / memory / GPU | Updates every second while the shell is open |
@@ -71,6 +77,8 @@ The gear in the shell opens the settings window. Everything is also in `%APPDATA
 For bug hunting, create an empty file named `debug` in `%LOCALAPPDATA%\DeskShell` and restart DeskShell: ManagedShell's detailed log then goes to `managedshell.log` there. Delete the file when done (that log grows quickly).
 
 "Start DeskShell when I sign in" is off until you turn it on.
+
+**Recovery:** if Explorer restarts, a monitor is plugged in or changes resolution, or the PC wakes from sleep, DeskShell rebuilds its docks, hides the taskbar again and asks tray apps to re-add their icons.
 
 ## Known limits
 

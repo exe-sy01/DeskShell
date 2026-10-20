@@ -46,6 +46,8 @@ public partial class App : Application
             Shutdown();
             return;
         }
+        // The installer and updater ask a running DeskShell to quit before replacing its files.
+        Installer.ListenForQuitRequests(() => Dispatcher.BeginInvoke(Quit));
 
         DispatcherUnhandledException += (_, ex) =>
         {
@@ -152,6 +154,7 @@ public partial class App : Application
 
         RegisterHotkeys();
         StartupRegistration.Apply(Settings.StartWithWindows);
+        UpdateService.Start();
         TrimMemorySoon(TimeSpan.FromSeconds(15));
     }
 
@@ -364,6 +367,7 @@ public partial class App : Application
         try
         {
             _watcher?.Dispose();
+            UpdateService.Stop();
             _hotkeys?.Dispose();
             GameMode.Stop();
             VoicemeeterService.Disconnect();

@@ -11,6 +11,7 @@ public static class Program
             TaskbarGuard.RunWatchdog(parentPid);
             return;
         }
+        if (Installer.RunCommand(args)) return;
 
         var app = new App();
         app.InitializeComponent();

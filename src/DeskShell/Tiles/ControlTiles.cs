@@ -369,25 +369,71 @@ public sealed class MixerTile : TileBase
     {
         _rows.Children.Clear();
 
-        var apps = AudioService.GetAppAudio();
-        _rows.Children.Add(Section(apps.Count == 0 ? "No apps are playing sound" : "Apps"));
+        var outputs = AudioService.GetOutputsWithApps();
+        var channels = VoicemeeterService.IsAvailable ? VoicemeeterService.Channels() : new();
+        var strips = channels.Where(c => !c.IsBus).ToList();
+
+        // Voicemeeter's devices (VAIO, AUX, VAIO3) first and always, even with nothing playing;
+        // their slider is the Voicemeeter fader. Other devices use their Windows volume.
+        _rows.Children.Add(Section("Outputs"));
+        foreach (var strip in strips)
+            AddOutput(strip.Name, outputs.FirstOrDefault(o => o.Name == strip.Key), strip);
+        foreach (var output in outputs.Where(o => strips.All(s => s.Key != o.Name)))
+            AddOutput(output.Name, output, null);
+        if (strips.Count == 0 && outputs.Count == 0)
+            _rows.Children.Add(Section("No apps are playing sound"));
+
+        var buses = channels.Where(c => c.IsBus).ToList();
+        if (buses.Count > 0)
+        {
+            _rows.Children.Add(Section("Voicemeeter outputs"));
+            foreach (var bus in buses) AddVm(bus);
+        }
+    }
+
+    /// <summary>Outputs whose apps are shown; right-clicking an output toggles it.</summary>
+    static readonly HashSet<string> Expanded = new();
+
+    void AddOutput(string name, OutputAudio? output, VmChannel? strip)
+    {
+        var apps = output?.Apps ?? new List<AppAudio>();
+        var sub = apps.Count switch { 0 => "nothing playing", 1 => "1 app", var n => $"{n} apps" };
+        var key = strip?.Key ?? name;
+        var header = strip != null
+            ? Row(OutputIcon(), name, sub, VoicemeeterService.MinGain, VoicemeeterService.MaxGain, strip.Gain, v => $"{v:+0;-0;0} dB", strip.Muted,
+                v => VoicemeeterService.SetGain(strip, (float)v),
+                m => VoicemeeterService.SetMuted(strip, m))
+            : Row(OutputIcon(), name, sub, 0, 100, output!.Volume * 100, v => $"{v:0}%", output.Muted,
+                v => AudioService.SetOutputVolume(output, (float)v / 100f),
+                m => AudioService.SetOutputMuted(output, m));
+        _rows.Children.Add(header);
+        if (apps.Count == 0) return;
+
+        var list = new StackPanel { Margin = new Thickness(18, 0, 0, 4), Visibility = Expanded.Contains(key) ? Visibility.Visible : Visibility.Collapsed };
         foreach (var app in apps)
         {
             var a = app;
-            _rows.Children.Add(Row(AppIcon(a), a.Name, string.Join(", ", a.Devices), 0, 100, a.Volume * 100, v => $"{v:0}%", a.Muted,
+            list.Children.Add(Row(AppIcon(a), a.Name, null, 0, 100, a.Volume * 100, v => $"{v:0}%", a.Muted,
                 v => AudioService.SetAppVolume(a, (float)v / 100f),
                 m => AudioService.SetAppMuted(a, m)));
         }
+        _rows.Children.Add(list);
 
-        if (VoicemeeterService.IsAvailable)
+        if (header is Panel fe)
         {
-            var channels = VoicemeeterService.Channels();
-            _rows.Children.Add(Section("Voicemeeter devices"));
-            foreach (var ch in channels.Where(x => !x.IsBus)) AddVm(ch);
-            _rows.Children.Add(Section("Voicemeeter outputs"));
-            foreach (var ch in channels.Where(x => x.IsBus)) AddVm(ch);
+            fe.Background = Brushes.Transparent; // right-clicks between the controls count too
+            fe.ToolTip = "Right-click to show or hide its apps";
+            fe.MouseRightButtonUp += (_, e) =>
+            {
+                e.Handled = true;
+                var show = list.Visibility != Visibility.Visible;
+                list.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+                if (show) Expanded.Add(key); else Expanded.Remove(key);
+            };
         }
     }
+
+    static UIElement OutputIcon() => Icon("", 14);
 
     void AddVm(VmChannel channel) =>
         _rows.Children.Add(Row(Icon(channel.IsBus ? "" : "", 14), channel.Name, null,
@@ -424,13 +470,13 @@ public sealed class MixerTile : TileBase
     static UIElement Row(UIElement icon, string name, string? sub, double min, double max, double value, Func<double, string> format, bool muted,
         Action<double> setValue, Action<bool> setMuted)
     {
-        var label = new StackPanel { Width = 96, Margin = new Thickness(8, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center, ToolTip = string.IsNullOrEmpty(sub) ? name : $"{name} → {sub}" };
+        var label = new StackPanel { Width = 96, Margin = new Thickness(8, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center, ToolTip = name };
         var title = Text(name, 12);
         title.TextTrimming = TextTrimming.CharacterEllipsis;
         label.Children.Add(title);
         if (!string.IsNullOrEmpty(sub))
         {
-            var line = Text("→ " + sub, 10, dim: true);
+            var line = Text(sub, 10, dim: true);
             line.TextTrimming = TextTrimming.CharacterEllipsis;
             label.Children.Add(line);
         }

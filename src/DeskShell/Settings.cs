@@ -60,6 +60,8 @@ public sealed class Settings
 
     // General
     public bool StartWithWindows { get; set; }
+    /// <summary>GitHub repository ("owner/name") whose releases DeskShell updates from. Empty = no update checks.</summary>
+    public string UpdateRepo { get; set; } = "";
 
     // Game mode: while something runs fullscreen
     public bool GameMode { get; set; } = true;

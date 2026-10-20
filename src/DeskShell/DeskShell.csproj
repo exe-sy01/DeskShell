@@ -12,6 +12,7 @@
     <AssemblyName>DeskShell</AssemblyName>
     <RootNamespace>DeskShell</RootNamespace>
     <StartupObject>DeskShell.Program</StartupObject>
+    <Version>1.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

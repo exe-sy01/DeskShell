@@ -84,6 +84,10 @@ public partial class ShellWindow : Window
         foreach (var host in Hosts) SafeCall(host.Tile.OnOpened);
         _ = BadgeService.Instance.RefreshAsync();
         _board.Open(WmNative.GetForegroundWindow());
+        var update = UpdateService.Available;
+        UpdateButton.Visibility = update != null ? Visibility.Visible : Visibility.Collapsed;
+        UpdateButton.Content = update != null ? $"Update to {update.Tag}" : "";
+        UpdateButton.IsEnabled = true;
 
         Backdrop.Opacity = 0;
         Show();
@@ -434,6 +438,16 @@ public partial class ShellWindow : Window
     }
 
     void Customise_Click(object sender, RoutedEventArgs e) => SetEditing(!_editing);
+
+    async void Update_Click(object sender, RoutedEventArgs e)
+    {
+        UpdateButton.IsEnabled = false;
+        UpdateButton.Content = "Downloading…";
+        var problem = await UpdateService.InstallAsync();
+        if (problem == null) return; // the new version asks this one to quit
+        UpdateButton.Content = problem;
+        UpdateButton.IsEnabled = true;
+    }
 
     void SetEditing(bool on)
     {

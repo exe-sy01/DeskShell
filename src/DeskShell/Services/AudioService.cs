@@ -5,8 +5,8 @@ namespace DeskShell.Services;
 public sealed record AudioDevice(string Id, string Name, bool IsDefault);
 
 /// <summary>
-/// One app's sound (all its audio sessions, on every output device). Its volume applies before the
-/// sound reaches the device, so it works alongside Voicemeeter.
+/// One app's sound on one output device (all its audio sessions there). Its volume applies before
+/// the sound reaches the device, so it works alongside Voicemeeter.
 /// </summary>
 public sealed class AppAudio
 {
@@ -16,10 +16,20 @@ public sealed class AppAudio
     public required string Name { get; init; }
     public string? ExePath { get; init; }
     public bool IsSystemSounds { get; init; }
-    /// <summary>Short names of the output devices it plays through, e.g. "VAIO" or "Speakers".</summary>
-    public List<string> Devices { get; } = new();
     public float Volume { get; set; }
     public bool Muted { get; set; }
+}
+
+/// <summary>An output device and the apps playing through it.</summary>
+public sealed class OutputAudio
+{
+    internal object? Endpoint; // IAudioEndpointVolume
+
+    /// <summary>Short name, e.g. "VAIO", "AUX" or "Speakers".</summary>
+    public required string Name { get; init; }
+    public float Volume { get; set; }
+    public bool Muted { get; set; }
+    public List<AppAudio> Apps { get; } = new();
 }
 
 /// <summary>Speaker volume and output-device switching through Windows Core Audio.</summary>
@@ -118,22 +128,37 @@ internal static class AudioService
 
     // ---------- per-app volume (audio sessions) ----------
 
-    /// <summary>Apps currently making (or ready to make) sound, on every active output device.</summary>
-    public static List<AppAudio> GetAppAudio()
+    /// <summary>Every output device with apps making (or ready to make) sound, and those apps.</summary>
+    public static List<OutputAudio> GetOutputsWithApps()
     {
-        var apps = new Dictionary<uint, AppAudio>();
+        var outputs = new Dictionary<string, OutputAudio>();
         try
         {
             var enumerator = NewEnumerator();
             if (enumerator.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE, out var devices) != 0 || devices == null) return new();
             devices.GetCount(out var deviceCount);
             var managerIid = typeof(IAudioSessionManager2).GUID;
+            var endpointIid = typeof(IAudioEndpointVolume).GUID;
             for (uint d = 0; d < deviceCount; d++)
             {
                 if (devices.Item(d, out var device) != 0 || device == null) continue;
                 if (device.Activate(ref managerIid, CLSCTX_ALL, IntPtr.Zero, out var managerObj) != 0 || managerObj is not IAudioSessionManager2 manager) continue;
                 if (manager.GetSessionEnumerator(out var sessions) != 0 || sessions == null) continue;
-                var deviceName = ShortDeviceName(ReadName(device));
+                var name = ShortDeviceName(ReadName(device)) ?? "Output";
+                if (!outputs.TryGetValue(name, out var output))
+                {
+                    output = new OutputAudio { Name = name };
+                    if (device.Activate(ref endpointIid, CLSCTX_ALL, IntPtr.Zero, out var ep) == 0 && ep is IAudioEndpointVolume endpoint)
+                    {
+                        output.Endpoint = endpoint;
+                        if (endpoint.GetMasterVolumeLevelScalar(out var level) == 0) output.Volume = level;
+                        output.Muted = endpoint.GetMute(out var muted) == 0 && muted;
+                    }
+                    outputs[name] = output;
+                }
+
+                // One row per app: apps like Discord play through several processes
+                var apps = output.Apps.ToDictionary(a => a.IsSystemSounds ? "system" : a.ExePath?.ToLowerInvariant() ?? $"pid {a.ProcessId}");
                 sessions.GetCount(out var count);
                 for (var i = 0; i < count; i++)
                 {
@@ -143,9 +168,10 @@ internal static class AudioService
                     var isSystem = session.IsSystemSoundsSession() == 0;
                     if (session is not ISimpleAudioVolume volume) continue;
 
-                    if (!apps.TryGetValue(pid, out var app))
+                    var exe = isSystem ? null : ProcessPath(pid);
+                    var key = isSystem ? "system" : exe?.ToLowerInvariant() ?? $"pid {pid}";
+                    if (!apps.TryGetValue(key, out var app))
                     {
-                        var exe = isSystem ? null : ProcessPath(pid);
                         app = new AppAudio
                         {
                             ProcessId = pid,
@@ -157,10 +183,10 @@ internal static class AudioService
                         volume.GetMute(out var muted);
                         app.Volume = level;
                         app.Muted = muted;
-                        apps[pid] = app;
+                        apps[key] = app;
+                        output.Apps.Add(app);
                     }
                     app.Sessions.Add(volume);
-                    if (deviceName != null && !app.Devices.Contains(deviceName)) app.Devices.Add(deviceName);
                 }
             }
         }
@@ -168,7 +194,21 @@ internal static class AudioService
         {
             Log.Error("Could not list app audio", ex);
         }
-        return apps.Values.OrderBy(a => a.IsSystemSounds).ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        foreach (var output in outputs.Values)
+            output.Apps.Sort((a, b) => a.IsSystemSounds != b.IsSystemSounds ? a.IsSystemSounds.CompareTo(b.IsSystemSounds) : string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+        return outputs.Values.Where(o => o.Apps.Count > 0).OrderBy(o => o.Name, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    public static void SetOutputVolume(OutputAudio output, float level)
+    {
+        output.Volume = Math.Clamp(level, 0f, 1f);
+        try { (output.Endpoint as IAudioEndpointVolume)?.SetMasterVolumeLevelScalar(output.Volume, ref _context); } catch { }
+    }
+
+    public static void SetOutputMuted(OutputAudio output, bool muted)
+    {
+        output.Muted = muted;
+        try { (output.Endpoint as IAudioEndpointVolume)?.SetMute(muted, ref _context); } catch { }
     }
 
     public static void SetAppVolume(AppAudio app, float level)

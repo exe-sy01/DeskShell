@@ -37,6 +37,8 @@ public partial class SettingsWindow : Window
         DockOnAllMonitors.IsChecked = _draft.DockOnAllMonitors;
         DockHeight.Text = _draft.DockHeight.ToString(CultureInfo.InvariantCulture);
         WeatherCity.Text = _draft.WeatherCity;
+        UpdateRepo.Text = _draft.UpdateRepo;
+        ShowInstallState();
         Fahrenheit.IsChecked = _draft.Fahrenheit;
         CustomAltTab.IsChecked = _draft.CustomAltTab;
         RestoreWindowPositions.IsChecked = _draft.RestoreWindowPositions;
@@ -178,6 +180,7 @@ public partial class SettingsWindow : Window
             _draft.DockHeight = h;
         else problems.Add("dock space must be 40–120");
         _draft.WeatherCity = WeatherCity.Text.Trim();
+        _draft.UpdateRepo = UpdateRepo.Text.Trim();
         _draft.Fahrenheit = Fahrenheit.IsChecked == true;
         _draft.CustomAltTab = CustomAltTab.IsChecked == true;
         _draft.RestoreWindowPositions = RestoreWindowPositions.IsChecked == true;
@@ -211,6 +214,32 @@ public partial class SettingsWindow : Window
     }
 
     void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    void ShowInstallState()
+    {
+        InstallNote.Text = Installer.IsInstalledCopy
+            ? $"DeskShell {Installer.VersionText}, installed in {Installer.InstallDir}. Remove it from Settings → Apps → Installed apps."
+            : $"DeskShell {Installer.VersionText}, running from {AppContext.BaseDirectory.TrimEnd('\\')}. Installing copies it to {Installer.InstallDir} and adds it to the Start menu and Installed apps.";
+        InstallButton.Visibility = Installer.IsInstalledCopy ? Visibility.Collapsed : Visibility.Visible;
+        InstallButton.Content = Installer.IsInstalled ? "Install this version over the installed one" : "Install DeskShell";
+    }
+
+    void Install_Click(object sender, RoutedEventArgs e)
+    {
+        // The installer is this exe with --install; it asks this running copy to quit first.
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!, "--install") { UseShellExecute = false });
+    }
+
+    async void CheckUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        // Checks the repo typed here, even before Save.
+        var saved = App.Settings.UpdateRepo;
+        App.Settings.UpdateRepo = UpdateRepo.Text.Trim();
+        UpdateStatus.Text = "Checking…";
+        UpdateStatus.Text = await Services.UpdateService.CheckAsync();
+        App.Settings.UpdateRepo = saved;
+        if (Services.UpdateService.Available != null) UpdateStatus.Text += ". Open the shell to install it.";
+    }
 
     void ResetTiles_Click(object sender, RoutedEventArgs e)
     {

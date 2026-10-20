@@ -5,7 +5,8 @@ using Microsoft.Win32;
 namespace DeskShell.Services;
 
 /// <summary>A Voicemeeter virtual input (a Windows playback device such as VAIO) or bus (output).</summary>
-public sealed record VmChannel(string Param, string Name, bool IsBus, float Gain, bool Muted);
+/// <remarks>Key is the default name (VAIO, AUX, VAIO3, A1, B1…); Name is the user's label if they set one.</remarks>
+public sealed record VmChannel(string Param, string Key, string Name, bool IsBus, float Gain, bool Muted);
 
 /// <summary>
 /// Controls Voicemeeter through its official remote API (VoicemeeterRemote64.dll, installed with
@@ -102,7 +103,8 @@ public static class VoicemeeterService
         for (var i = virtualStart; i < strips; i++)
         {
             var param = $"Strip[{i}]";
-            list.Add(new VmChannel(param, Label(param, virtualNames[i - virtualStart]), false, Float($"{param}.Gain"), Float($"{param}.Mute") > 0.5f));
+            var key = virtualNames[i - virtualStart];
+            list.Add(new VmChannel(param, key, Label(param, key), false, Float($"{param}.Gain"), Float($"{param}.Mute") > 0.5f));
         }
         var hardwareBuses = TypeNow() switch { 1 => 1, 2 => 3, _ => 5 };
         for (var i = 0; i < buses; i++)
@@ -111,7 +113,7 @@ public static class VoicemeeterService
             // Skip hardware outputs with no device picked in Voicemeeter
             if (i < hardwareBuses && String($"{param}.device.name") is "") continue;
             var fallback = i < hardwareBuses ? $"A{i + 1}" : $"B{i - hardwareBuses + 1}";
-            list.Add(new VmChannel(param, Label(param, fallback), true, Float($"{param}.Gain"), Float($"{param}.Mute") > 0.5f));
+            list.Add(new VmChannel(param, fallback, Label(param, fallback), true, Float($"{param}.Gain"), Float($"{param}.Mute") > 0.5f));
         }
         return list;
     }
