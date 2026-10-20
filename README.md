@@ -50,6 +50,10 @@ DeskShell doesn't include its own file manager; it's set up alongside [Files](ht
 
 Plus Lock / Sleep / Restart / Shut down (restart and shut down need a second click), and a strip of every open window.
 
+**Games**
+- The *Games* tile lists every installed game with box art where the launcher has it: Steam (all libraries), Epic, the Xbox app / Game Pass, and games registered by Battle.net, Ubisoft, EA, Riot and Rockstar. Click to play; games also show up in shell search.
+- **Game mode**: while something runs fullscreen, DeskShell turns on Do Not Disturb (Windows Focus, only if it wasn't already on), closes the shell, pauses its background checks and frees memory. It ends 5 seconds after you leave the game. Both parts can be switched off in settings.
+
 **Windows**
 - **Alt+Tab**: DeskShell's own switcher with live previews, most recent first. Windows' own Alt+Tab is used while a fullscreen game runs.
 - **Show all windows** (`Ctrl+Alt+Up`, or the button in the shell): every window side by side. Click to switch, middle-click or × to close.

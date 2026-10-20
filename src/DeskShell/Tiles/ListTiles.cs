@@ -367,15 +367,96 @@ public sealed class PinnedTile : PanelTile
     }
 }
 
+/// <summary>Every installed game (Steam, Epic, Xbox, Battle.net, Ubisoft, EA, Riot…) with box art; click to play.</summary>
+public sealed class GamesTile : PanelTile
+{
+    readonly WrapPanel _grid = new();
+    readonly TextBlock _empty = Text("Looking for your games…", 12, dim: true);
+
+    public GamesTile(ShellContext c) : base(c, "Games")
+    {
+        HeaderActions.Children.Add(IconButton("", "Look for new games", async (_, _) =>
+        {
+            _empty.Text = "Looking for your games…";
+            await GameLibrary.RefreshAsync(TimeSpan.Zero);
+            Build();
+        }, 28));
+        var stack = new StackPanel();
+        stack.Children.Add(_empty);
+        stack.Children.Add(_grid);
+        Body = Scroll(stack);
+        GameLibrary.Changed += () => { if (IsVisible) Build(); };
+    }
+
+    public override string Id => "games";
+    public override string Title => "Games";
+    public override (int W, int H)[] Sizes => [(4, 2), (4, 3), (2, 2), (2, 3), (4, 1)];
+
+    public override async void OnOpened()
+    {
+        Build();
+        await GameLibrary.RefreshAsync();
+    }
+
+    void Build()
+    {
+        var games = GameLibrary.Games;
+        HeaderText.Text = games.Count == 0 ? "Games" : $"Games · {games.Count}";
+        _empty.Visibility = games.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (games.Count == 0) _empty.Text = "No games found yet";
+        _grid.Children.Clear();
+
+        foreach (var game in games)
+        {
+            var picture = GameLibrary.Picture(game, out var isCover);
+            var art = new Border { Width = 56, Height = 84, CornerRadius = new CornerRadius(4), ClipToBounds = true };
+            if (picture != null && isCover)
+            {
+                art.Background = new ImageBrush(picture) { Stretch = Stretch.UniformToFill };
+            }
+            else
+            {
+                art.SetResourceReference(Border.BackgroundProperty, "TileHoverBrush");
+                art.Child = picture != null
+                    ? new Image { Source = picture, Width = 32, Height = 32 }
+                    : Icon("", 22); // game controller
+            }
+
+            var name = Text(game.Name, 11, dim: true);
+            name.Width = 60;
+            name.TextAlignment = TextAlignment.Center;
+            name.Margin = new Thickness(0, 3, 0, 0);
+
+            var content = new StackPanel { Width = 60 };
+            content.Children.Add(art);
+            content.Children.Add(name);
+            var button = new Button
+            {
+                Style = Res<Style>("ListRow"),
+                Content = content,
+                Margin = new Thickness(0, 0, 4, 4),
+                ToolTip = $"{game.Name} · {game.Source}"
+            };
+            var g = game;
+            button.Click += (_, _) =>
+            {
+                CloseShell();
+                GameLibrary.Launch(g);
+            };
+            _grid.Children.Add(button);
+        }
+    }
+}
+
 public static class TileFactory
 {
     public static readonly string[] AllIds =
-        ["pinned", "wifi", "bluetooth", "focus", "darkmode", "screenshot", "layouts", "volume", "brightness",
+        ["pinned", "games", "wifi", "bluetooth", "focus", "darkmode", "screenshot", "layouts", "volume", "brightness",
          "media", "audioout", "stats", "weather", "calendar", "clipboard", "notifications", "tray"];
 
     public static readonly Dictionary<string, string> Titles = new()
     {
-        ["pinned"] = "Pinned apps", ["wifi"] = "Wi-Fi / network", ["bluetooth"] = "Bluetooth", ["focus"] = "Do not disturb",
+        ["pinned"] = "Pinned apps", ["games"] = "Games", ["wifi"] = "Wi-Fi / network", ["bluetooth"] = "Bluetooth", ["focus"] = "Do not disturb",
         ["darkmode"] = "Dark mode", ["screenshot"] = "Screenshot", ["layouts"] = "Window layout", ["volume"] = "Volume",
         ["brightness"] = "Brightness", ["media"] = "Now playing", ["audioout"] = "Sound output", ["stats"] = "CPU / memory / GPU",
         ["weather"] = "Weather", ["calendar"] = "Calendar", ["clipboard"] = "Clipboard history", ["notifications"] = "Notifications",
@@ -385,6 +466,7 @@ public static class TileFactory
     public static TileBase? Create(string id, ShellContext c) => id switch
     {
         "pinned" => new PinnedTile(c),
+        "games" => new GamesTile(c),
         "wifi" => new WifiTile(c),
         "bluetooth" => new BluetoothTile(c),
         "focus" => new FocusTile(c),

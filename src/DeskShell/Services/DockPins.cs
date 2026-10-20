@@ -89,6 +89,18 @@ public static class DockPins
 
     public static void Stop() => _timer?.Stop();
 
+    /// <summary>Pauses or resumes checking which pinned apps are running (paused during game mode; the dock is hidden then).</summary>
+    public static void SetPaused(bool paused)
+    {
+        if (_timer == null) return;
+        if (paused) _timer.Stop();
+        else
+        {
+            Update();
+            _timer.Start();
+        }
+    }
+
     static IEnumerable<ApplicationWindow> AllWindows() =>
         _shell?.Tasks.GroupedWindows?.SourceCollection?.OfType<ApplicationWindow>().Where(w => w.ShowInTaskbar) ?? [];
 

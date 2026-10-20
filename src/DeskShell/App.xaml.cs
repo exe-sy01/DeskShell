@@ -135,6 +135,21 @@ public partial class App : Application
         _shellWindow = new ShellWindow(Shell, apps, _clipboard);
 
         BadgeService.Instance.Start(Shell);
+        _ = GameLibrary.RefreshAsync();
+
+        // Game mode: while something runs fullscreen, get out of the way and do as little as possible.
+        GameMode.Start(Shell.FullScreenHelper);
+        GameMode.Changed += on =>
+        {
+            BadgeService.Instance.SetPaused(on);
+            DockPins.SetPaused(on);
+            _placer?.SetPaused(on);
+            if (!on) return;
+            HideShell();
+            if (Overview.IsOpen) Overview.CloseOverview();
+            TrimMemorySoon(TimeSpan.FromSeconds(2));
+        };
+
         RegisterHotkeys();
         StartupRegistration.Apply(Settings.StartWithWindows);
         TrimMemorySoon(TimeSpan.FromSeconds(15));
@@ -310,6 +325,7 @@ public partial class App : Application
         {
             SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
             _hotkeys?.Dispose();
+            GameMode.Stop();
             BadgeService.Instance.Stop();
             DockPins.Stop();
             _altTab?.Dispose();

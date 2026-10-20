@@ -51,7 +51,8 @@ internal static class FocusService
     {
         try
         {
-            if (on) Manager?.TryStartFocusSession();
+            // A long session, so it doesn't time out mid-game; game mode and the tile switch it off.
+            if (on) Manager?.TryStartFocusSession(DateTimeOffset.Now.AddHours(12));
             else Manager?.DeactivateFocus();
         }
         catch (Exception ex)

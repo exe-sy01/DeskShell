@@ -71,6 +71,18 @@ public sealed class BadgeService : INotifyPropertyChanged
 
     public void Stop() => _timer?.Stop();
 
+    /// <summary>Pauses or resumes the 15-second check (paused during game mode).</summary>
+    public void SetPaused(bool paused)
+    {
+        if (_timer == null) return;
+        if (paused) _timer.Stop();
+        else
+        {
+            _timer.Start();
+            _ = RefreshAsync();
+        }
+    }
+
     public async Task RefreshAsync()
     {
         if (_busy) return;

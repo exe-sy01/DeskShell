@@ -186,6 +186,13 @@ internal sealed class WindowPlacer : IDisposable
         return new();
     }
 
+    /// <summary>Pauses the once-a-minute position snapshot (paused during game mode).</summary>
+    public void SetPaused(bool paused)
+    {
+        if (paused) _snapshot.Stop();
+        else _snapshot.Start();
+    }
+
     public void Dispose()
     {
         _snapshot.Stop();

@@ -256,7 +256,15 @@ public partial class ShellWindow : Window
             return;
         }
 
-        var results = _context.Apps.Search(query);
+        // Games first (they launch through their own launcher), then apps, without listing a game twice.
+        var games = GameLibrary.Search(query, 4)
+            .Select(g => new AppResult(g.Name, "game:" + g.Key, GameLibrary.Picture(g, out _)))
+            .ToList();
+        var gameNames = games.Select(g => Normalize(g.Name)).ToHashSet();
+        var results = games
+            .Concat(_context.Apps.Search(query).Where(a => !gameNames.Contains(Normalize(a.Name))))
+            .Take(8)
+            .ToList();
         Results.ItemsSource = results;
         Results.SelectedIndex = results.Count > 0 ? 0 : -1;
         // Hidden (not collapsed) keeps the panel the same size while you type.
@@ -274,7 +282,7 @@ public partial class ShellWindow : Window
     {
         var menu = Results.ContextMenu!;
         menu.Items.Clear();
-        if (ItemUnder(e.OriginalSource) is not { } app)
+        if (ItemUnder(e.OriginalSource) is not { } app || app.Target.StartsWith("game:"))
         {
             e.Handled = true;
             return;
@@ -314,10 +322,13 @@ public partial class ShellWindow : Window
         return null;
     }
 
+    static string Normalize(string name) => new(name.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+
     void Launch(AppResult app)
     {
         CloseShell(immediate: true);
-        AppIndex.Launch(app.Target);
+        if (app.Target.StartsWith("game:") && GameLibrary.Find(app.Target[5..]) is { } game) GameLibrary.Launch(game);
+        else AppIndex.Launch(app.Target);
     }
 
     // ---------- tiles and customising ----------

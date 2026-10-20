@@ -61,6 +61,10 @@ public sealed class Settings
     // General
     public bool StartWithWindows { get; set; }
 
+    // Game mode: while something runs fullscreen
+    public bool GameMode { get; set; } = true;
+    public bool GameModeDoNotDisturb { get; set; } = true;
+
     // Weather
     /// <summary>City name for weather. Empty = no weather.</summary>
     public string WeatherCity { get; set; } = "";
@@ -83,9 +87,16 @@ public sealed class Settings
     public bool RestoreWindowPositions { get; set; } = true;
     public List<AppRule> AppRules { get; set; } = new();
 
+    /// <summary>Tiles this settings file already knows about; tiles added in later versions get placed once.</summary>
+    public List<string> KnownTiles { get; set; } = new();
+
+    /// <summary>Tiles added after the first release, with where they go in an existing layout (after which tile).</summary>
+    static readonly (string Id, int W, int H, string After)[] NewTiles = [("games", 4, 2, "pinned")];
+
     public static List<TileSetting> DefaultTiles() => new()
     {
         new("pinned", 4, 1),
+        new("games", 4, 2),
         new("wifi", 1, 1),
         new("bluetooth", 1, 1),
         new("calendar", 2, 3),
@@ -124,6 +135,7 @@ public sealed class Settings
             if (File.Exists(FilePath))
             {
                 var loaded = JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath), JsonOptions) ?? new Settings();
+                loaded.PlaceNewTiles();
                 loaded.Save(); // writes any settings added since the file was created
                 return loaded;
             }
@@ -137,6 +149,19 @@ public sealed class Settings
         var fresh = new Settings();
         fresh.Save();
         return fresh;
+    }
+
+    /// <summary>Adds tiles introduced since this layout was saved (once; removing them later sticks).</summary>
+    void PlaceNewTiles()
+    {
+        foreach (var (id, w, h, after) in NewTiles)
+        {
+            if (KnownTiles.Contains(id)) continue;
+            KnownTiles.Add(id);
+            if (Tiles.Any(t => t.Id == id)) continue;
+            var index = Tiles.FindIndex(t => t.Id == after);
+            Tiles.Insert(index < 0 ? 0 : index + 1, new TileSetting(id, w, h));
+        }
     }
 
     public void Save()

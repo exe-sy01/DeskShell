@@ -62,6 +62,11 @@
                     <TextBox x:Name="QuitHotkey" Grid.Column="1" Style="{StaticResource Field}" />
                 </Grid>
 
+                <TextBlock Style="{StaticResource Section}" Text="Games" />
+                <TextBlock Style="{StaticResource Note}" Text="Game mode starts when something runs fullscreen: DeskShell hides, pauses its background checks and frees memory until you leave the game." />
+                <CheckBox x:Name="GameModeOn" Style="{StaticResource Switch}" Content="Game mode" Margin="0,4,0,8" />
+                <CheckBox x:Name="GameModeDnd" Style="{StaticResource Switch}" Content="Turn on Do Not Disturb during games (if it isn't on already)" Margin="0,4,0,4" />
+
                 <TextBlock Style="{StaticResource Section}" Text="Dock" />
                 <CheckBox x:Name="DockOnAllMonitors" Style="{StaticResource Switch}" Margin="0,4,0,10"
                           Content="A dock on every monitor, each showing its own windows" />
