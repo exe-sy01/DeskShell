@@ -5,7 +5,7 @@ using ManagedShell.AppBar;
 namespace DeskShell.Services;
 
 /// <summary>
-/// While something runs fullscreen (usually a game): turn on Do Not Disturb (Windows Focus) if
+/// While something runs fullscreen (usually a game): turn on Do Not Disturb if
 /// it wasn't already on, and tell DeskShell to pause its background work. Leaving waits a few
 /// seconds, so a quick Alt+Tab out of a game doesn't flip everything back and forth.
 /// </summary>
@@ -13,7 +13,7 @@ public static class GameMode
 {
     static FullScreenHelper? _fullscreen;
     static DispatcherTimer? _leaveDelay;
-    static bool _weTurnedOnFocus;
+    static bool _weTurnedOnDnd;
 
     public static bool Active { get; private set; }
 
@@ -57,17 +57,14 @@ public static class GameMode
 
         if (on)
         {
-            if (App.Settings.GameModeDoNotDisturb && FocusService.IsSupported && !FocusService.IsActive)
-            {
-                FocusService.SetActive(true);
-                _weTurnedOnFocus = true;
-            }
+            if (App.Settings.GameModeDoNotDisturb && DoNotDisturb.IsSupported && !DoNotDisturb.IsOn)
+                _weTurnedOnDnd = DoNotDisturb.SetOn(true);
         }
-        else if (_weTurnedOnFocus)
+        else if (_weTurnedOnDnd)
         {
             // Only switch it off if we were the ones who switched it on.
-            if (FocusService.IsActive) FocusService.SetActive(false);
-            _weTurnedOnFocus = false;
+            if (DoNotDisturb.IsOn) DoNotDisturb.SetOn(false);
+            _weTurnedOnDnd = false;
         }
 
         Changed?.Invoke(on);

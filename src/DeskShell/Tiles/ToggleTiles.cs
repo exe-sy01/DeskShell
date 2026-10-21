@@ -97,7 +97,6 @@ public sealed class FocusTile : ToggleTile
 {
     public FocusTile(ShellContext c) : base(c, "", "Do not disturb")
     {
-        FocusService.Changed += () => Dispatcher.InvokeAsync(OnOpened);
     }
 
     public override string Id => "focus";
@@ -106,24 +105,24 @@ public sealed class FocusTile : ToggleTile
 
     public override void OnOpened()
     {
-        if (!FocusService.IsSupported)
+        if (!DoNotDisturb.IsSupported)
         {
             Show(false, "Open settings");
             return;
         }
-        var on = FocusService.IsActive;
-        Show(on, on ? "On (Focus)" : "Off");
+        var on = DoNotDisturb.IsOn;
+        Show(on, on ? "On" : "Off");
     }
 
     protected override void OnToggled(bool on)
     {
-        if (!FocusService.IsSupported)
+        if (!DoNotDisturb.IsSupported)
         {
             CloseShell();
             SystemToggles.OpenSettings("notifications");
             return;
         }
-        FocusService.SetActive(on);
+        DoNotDisturb.SetOn(on);
         OnOpened();
     }
 }

@@ -41,7 +41,7 @@ DeskShell doesn't include its own file manager; it's set up alongside [Files](ht
 |---|---|
 | Pinned apps | Right-click a search result → Pin |
 | Wi-Fi / network, Bluetooth | Click toggles, right-click opens Windows settings |
-| Do not disturb | Uses Windows 11 Focus, which turns on Do Not Disturb |
+| Do not disturb | Windows' own Do Not Disturb (the same switch as in Settings → Notifications) |
 | Dark mode | Switches Windows light/dark |
 | Volume, Sound output | Output switches the default device for everything |
 | Mixer | One row per output: Voicemeeter's VAIO, AUX and VAIO3 (their Voicemeeter faders) and any other device apps play through (its Windows volume). Right-click an output to show its apps, each with its own volume. Below: Voicemeeter's A/B outputs |
@@ -60,7 +60,7 @@ Plus Lock / Sleep / Restart / Shut down (restart and shut down need a second cli
 
 **Games**
 - The *Games* tile lists every installed game with box art where the launcher has it: Steam (all libraries), Epic, the Xbox app / Game Pass, and games registered by Battle.net, Ubisoft, EA, Riot and Rockstar. Click to play; games also show up in shell search.
-- **Game mode**: while something runs fullscreen, DeskShell turns on Do Not Disturb (Windows Focus, only if it wasn't already on), closes the shell, pauses its background checks and frees memory. It ends 5 seconds after you leave the game. Both parts can be switched off in settings.
+- **Game mode**: while something runs fullscreen, DeskShell turns on Do Not Disturb (only if it wasn't already on, and switches it off again afterwards), closes the shell, pauses its background checks and frees memory. It ends 5 seconds after you leave the game. Both parts can be switched off in settings.
 
 **Windows**
 - **Alt+Tab**: DeskShell's own switcher with live previews, most recent first. Windows' own Alt+Tab is used while a fullscreen game runs.
@@ -83,7 +83,6 @@ For bug hunting, create an empty file named `debug` in `%LOCALAPPDATA%\DeskShell
 ## Known limits
 
 - Notifications can't be dismissed from the tile (Windows doesn't allow it); the button opens Windows' notification center.
-- Do Not Disturb has no direct switch in Windows, so the tile starts/stops a Focus session.
 - Clipboard history keeps text only, not images.
 
 ## Built with
