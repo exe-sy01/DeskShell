@@ -80,7 +80,9 @@
                 <CheckBox x:Name="GameModeDnd" Style="{StaticResource Switch}" Content="Turn on Do Not Disturb during games (if it isn't on already)" Margin="0,4,0,4" />
 
                 <TextBlock Style="{StaticResource Section}" Text="Dock" />
-                <CheckBox x:Name="DockOnAllMonitors" Style="{StaticResource Switch}" Margin="0,4,0,10"
+                <CheckBox x:Name="ShowDock" Style="{StaticResource Switch}" Margin="0,4,0,10"
+                          Content="Show the dock (off: just the shell, opened with its hotkey)" />
+                <CheckBox x:Name="DockOnAllMonitors" Style="{StaticResource Switch}" Margin="0,4,0,10" IsEnabled="{Binding IsChecked, ElementName=ShowDock}"
                           Content="A dock on every monitor, each showing its own windows" />
                 <Grid Style="{StaticResource Row}">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="220" /><ColumnDefinition Width="100" /></Grid.ColumnDefinitions>

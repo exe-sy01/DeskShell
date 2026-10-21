@@ -55,6 +55,8 @@ public sealed class Settings
     public string QuitHotkey { get; set; } = "Ctrl+Alt+Shift+Q";
 
     // Dock
+    /// <summary>Off = no dock at all, just the shell (Alt+Space); windows get the whole screen.</summary>
+    public bool ShowDock { get; set; } = true;
     public bool DockOnAllMonitors { get; set; } = true;
     public double DockHeight { get; set; } = 64;
 

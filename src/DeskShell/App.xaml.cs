@@ -204,7 +204,7 @@ public partial class App : Application
     /// <summary>Called by the settings window after saving.</summary>
     public void ApplySettings(Settings updated)
     {
-        var dockChanged = updated.DockOnAllMonitors != Settings.DockOnAllMonitors || Math.Abs(updated.DockHeight - Settings.DockHeight) > 0.5;
+        var dockChanged = updated.ShowDock != Settings.ShowDock || updated.DockOnAllMonitors != Settings.DockOnAllMonitors || Math.Abs(updated.DockHeight - Settings.DockHeight) > 0.5;
         if (!updated.ActiveWindowBorder) _border?.Reset();
         Settings = updated;
         Settings.Save();
@@ -236,6 +236,14 @@ public partial class App : Application
 
     void CreateDocks()
     {
+        _workArea ??= new WorkAreaReserver();
+        if (!Settings.ShowDock)
+        {
+            // No dock: still keep the hidden taskbar's strip free for windows on every screen.
+            _workArea.Reserve(AppBarScreen.FromAllScreens(), 0);
+            return;
+        }
+
         var screens = Settings.DockOnAllMonitors
             ? AppBarScreen.FromAllScreens()
             : new List<AppBarScreen> { AppBarScreen.FromPrimaryScreen() };
@@ -247,7 +255,6 @@ public partial class App : Application
             _docks.Add(dock);
         }
 
-        _workArea ??= new WorkAreaReserver();
         _workArea.Reserve(screens, Settings.DockHeight);
     }
 

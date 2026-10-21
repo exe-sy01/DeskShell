@@ -176,7 +176,7 @@ public partial class ShellWindow : Window
         const double sideGap = 16, sideMin = 300, sideMax = 380;
         ShellPanel.LayoutTransform = Transform.Identity;
         // Keep clear of the dock at the bottom.
-        var availableHeight = ActualHeight - App.Settings.DockHeight - 40;
+        var availableHeight = ActualHeight - (App.Settings.ShowDock ? App.Settings.DockHeight : 0) - 40;
         var availableWidth = ActualWidth - 80;
 
         var sideWidth = Math.Min(sideMax, (availableWidth - Card.Width) / 2 - sideGap);

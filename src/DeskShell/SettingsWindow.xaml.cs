@@ -34,6 +34,7 @@ public partial class SettingsWindow : Window
         QuitHotkey.Text = _draft.QuitHotkey;
         GameModeOn.IsChecked = _draft.GameMode;
         GameModeDnd.IsChecked = _draft.GameModeDoNotDisturb;
+        ShowDock.IsChecked = _draft.ShowDock;
         DockOnAllMonitors.IsChecked = _draft.DockOnAllMonitors;
         DockHeight.Text = _draft.DockHeight.ToString(CultureInfo.InvariantCulture);
         WeatherCity.Text = _draft.WeatherCity;
@@ -175,6 +176,7 @@ public partial class SettingsWindow : Window
         _draft.StartWithWindows = StartWithWindows.IsChecked == true;
         _draft.GameMode = GameModeOn.IsChecked == true;
         _draft.GameModeDoNotDisturb = GameModeDnd.IsChecked == true;
+        _draft.ShowDock = ShowDock.IsChecked == true;
         _draft.DockOnAllMonitors = DockOnAllMonitors.IsChecked == true;
         if (double.TryParse(DockHeight.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var h) && h is >= 40 and <= 120)
             _draft.DockHeight = h;
