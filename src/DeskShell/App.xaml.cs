@@ -36,6 +36,9 @@ public partial class App : Application
     DispatcherTimer? _trimTimer;
     bool _quitting;
 
+    /// <summary>Which monitors a fullscreen or borderless window covers; the docks hide there.</summary>
+    public static FullscreenWatcher? Fullscreen { get; private set; }
+
     public bool IsShellOpen => _shellWindow?.IsOpen == true;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -109,6 +112,7 @@ public partial class App : Application
         var apps = new AppIndex();
         apps.Start();
         DockPins.Start(Shell, apps);
+        Fullscreen = new FullscreenWatcher();
         CreateDocks();
         StartWatchingSystem();
 
@@ -120,6 +124,7 @@ public partial class App : Application
         _events = new WindowEvents();
         _events.Foreground += hwnd =>
         {
+            Fullscreen.CheckSoon();
             mru.Touch(hwnd);
             _border.OnForeground(hwnd);
         };
@@ -374,6 +379,7 @@ public partial class App : Application
         try
         {
             _watcher?.Dispose();
+            Fullscreen?.Dispose();
             UpdateService.Stop();
             _hotkeys?.Dispose();
             GameMode.Stop();

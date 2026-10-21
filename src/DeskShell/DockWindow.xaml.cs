@@ -43,7 +43,13 @@ public partial class DockWindow : AppBarWindow
         UpdatePinDivider();
 
         DockPins.Changed += OnPinsChanged;
-        Closed += (_, _) => DockPins.Changed -= OnPinsChanged;
+        if (App.Fullscreen != null) App.Fullscreen.Changed += UpdateFullscreen;
+        Closed += (_, _) =>
+        {
+            DockPins.Changed -= OnPinsChanged;
+            if (App.Fullscreen != null) App.Fullscreen.Changed -= UpdateFullscreen;
+        };
+        Loaded += (_, _) => UpdateFullscreen();
         SourceInitialized += (_, _) => Native.MakeNonActivating(new WindowInteropHelper(this).Handle);
     }
 
@@ -133,15 +139,8 @@ public partial class DockWindow : AppBarWindow
 
     // ---------- fullscreen apps ----------
 
-    protected override void OnFullScreenEnter(FullScreenApp app)
-    {
-        base.OnFullScreenEnter(app);
-        Visibility = Visibility.Hidden;
-    }
-
-    protected override void OnFullScreenLeave()
-    {
-        base.OnFullScreenLeave();
-        Visibility = Visibility.Visible;
-    }
+    // Hidden while a fullscreen or borderless window fills this monitor, even when another
+    // monitor has focus (see FullscreenWatcher).
+    void UpdateFullscreen() =>
+        Visibility = App.Fullscreen?.IsCovered(Screen.HMonitor) == true ? Visibility.Hidden : Visibility.Visible;
 }
