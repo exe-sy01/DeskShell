@@ -186,7 +186,9 @@ public partial class IslandWindow : Window
 
         PrevButton.Visibility = NextButton.Visibility = s.Arrows == "hidden" ? Visibility.Collapsed : Visibility.Visible;
         SetArrowOpacity(s.Arrows == "hover" ? 0 : 1);
-        Contents.Margin = new Thickness(s.Arrows == "hidden" ? 12 : 5, 0, s.Arrows == "hidden" ? 12 : 5, 0);
+        // With page dots, lift the contents so a second line of text clears them.
+        var side = s.Arrows == "hidden" ? 12 : 5;
+        Contents.Margin = new Thickness(side, 0, side, s.PageDots ? 6 : 0);
 
         IconSize = s.IconSize;
         ShowActiveTitle = s.ActiveWindowTitle;
