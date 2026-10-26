@@ -55,6 +55,10 @@ public partial class IslandWindow : Window
     List<string> _pages = new();
     int _page;
     bool _allowClose, _menuOpen, _peeking, _inMoment, _hovered, _inCall;
+    /// <summary>How much page contents are scaled up to suit a taller island (1 at 41 px).</summary>
+    double _contentScale = 1;
+    /// <summary>When each person in the call last spoke, so recent talkers stay in view.</summary>
+    readonly Dictionary<string, long> _lastSpoke = new();
     string? _pageBeforeCall;
     string? _pageBeforeMoment;
     string? _lastTrack;
@@ -189,6 +193,10 @@ public partial class IslandWindow : Window
         // With page dots, lift the contents so a second line of text clears them.
         var side = s.Arrows == "hidden" ? 12 : 5;
         Contents.Margin = new Thickness(side, 0, side, s.PageDots ? 6 : 0);
+
+        // A taller island gets bigger text, icons and avatars (but not all the way, so things still fit).
+        _contentScale = Math.Clamp(1 + (s.Height - 41) / 41 * 0.75, 0.8, 1.5);
+        PageHost.LayoutTransform = new ScaleTransform(_contentScale, _contentScale);
 
         IconSize = s.IconSize;
         ShowActiveTitle = s.ActiveWindowTitle;
@@ -677,14 +685,26 @@ public partial class IslandWindow : Window
         var call = DiscordVoice.Current;
         if (call == null) return;
         _callChannel.Text = call.Channel;
-        _callServer.Text = call.Server ?? "";
+        _callServer.Text = FirstWord(call.Server);
         _callServer.Visibility = string.IsNullOrEmpty(call.Server) ? Visibility.Collapsed : Visibility.Visible;
         _callPage.ToolTip = $"{call.Channel}{(call.Server != null ? " · " + call.Server : "")}\n" + string.Join("\n", call.Peers.Select(p => p.Name));
 
         // Room for avatars: the content area minus the headset glyph and some text
-        var room = Math.Max(26, _style.Width - 2 * 33 - 26 - 70);
-        var fit = Math.Max(1, (int)(room / 26));
-        var shown = call.Peers.Count > fit ? call.Peers.Take(fit - 1).ToList() : call.Peers.ToList();
+        // Room for avatars (in unscaled units): the page area minus the headset glyph and some text
+        var room = Math.Max(28, (_style.Width - 2 * 33 - 8) / _contentScale - 26 - 64);
+        var fit = Math.Max(1, (int)(room / 28));
+
+        // Whoever's talking goes first, then whoever talked most recently, so speakers are always in view
+        var now = Environment.TickCount64;
+        foreach (var p in call.Peers.Where(p => p.Speaking)) _lastSpoke[p.Id] = now;
+        var ordered = call.Peers
+            .Select((p, i) => (Peer: p, Index: i))
+            .OrderByDescending(x => x.Peer.Speaking)
+            .ThenByDescending(x => _lastSpoke.GetValueOrDefault(x.Peer.Id))
+            .ThenBy(x => x.Index)
+            .Select(x => x.Peer)
+            .ToList();
+        var shown = ordered.Count > fit ? ordered.Take(fit - 1).ToList() : ordered;
         _callMore.Text = call.Peers.Count > shown.Count ? $"+{call.Peers.Count - shown.Count}" : "";
         _callMore.Visibility = _callMore.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 
@@ -696,6 +716,14 @@ public partial class IslandWindow : Window
             UpdatePeerView(view, peer);
             _callPeople.Children.Add(view.Root);
         }
+    }
+
+    /// <summary>"Socialize | Active VC Server • Hangout" → "Socialize".</summary>
+    static string FirstWord(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "";
+        var first = name.Trim().Split([' ', '|', '•', '·', '-', '—', '/'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        return first ?? name.Trim();
     }
 
     PeerView MakePeerView()
