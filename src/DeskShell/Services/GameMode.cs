@@ -1,6 +1,4 @@
-using System.Collections.Specialized;
 using System.Windows.Threading;
-using ManagedShell.AppBar;
 
 namespace DeskShell.Services;
 
@@ -11,7 +9,7 @@ namespace DeskShell.Services;
 /// </summary>
 public static class GameMode
 {
-    static FullScreenHelper? _fullscreen;
+    static FullscreenWatcher? _fullscreen;
     static DispatcherTimer? _leaveDelay;
     static bool _weTurnedOnDnd;
 
@@ -20,23 +18,23 @@ public static class GameMode
     /// <summary>Raised on the UI thread when game mode starts (true) or ends (false).</summary>
     public static event Action<bool>? Changed;
 
-    public static void Start(FullScreenHelper fullscreen)
+    public static void Start(FullscreenWatcher fullscreen)
     {
         _fullscreen = fullscreen;
         _leaveDelay = new DispatcherTimer(TimeSpan.FromSeconds(5), DispatcherPriority.Normal, (_, _) =>
         {
             _leaveDelay!.Stop();
-            if (_fullscreen?.FullScreenApps.Count == 0) Set(false);
+            if (_fullscreen?.ForegroundFullscreen != true) Set(false);
         }, Dispatcher.CurrentDispatcher);
         _leaveDelay.Stop();
-        fullscreen.FullScreenApps.CollectionChanged += OnFullscreenChanged;
+        fullscreen.Changed += OnFullscreenChanged;
     }
 
-    static void OnFullscreenChanged(object? sender, NotifyCollectionChangedEventArgs e) =>
+    static void OnFullscreenChanged() =>
         System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
         {
             if (!App.Settings.GameMode) return;
-            if (_fullscreen?.FullScreenApps.Count > 0)
+            if (_fullscreen?.ForegroundFullscreen == true)
             {
                 _leaveDelay?.Stop();
                 Set(true);
@@ -52,7 +50,7 @@ public static class GameMode
     {
         if (on == Active) return;
         Active = on;
-        var app = _fullscreen?.FullScreenApps.FirstOrDefault()?.title;
+        var app = _fullscreen?.ForegroundTitle;
         Log.Info(on ? $"Game mode on ({app})" : "Game mode off");
 
         if (on)
@@ -73,7 +71,7 @@ public static class GameMode
     /// <summary>Ends game mode now (e.g. when DeskShell quits), undoing Do Not Disturb if we set it.</summary>
     public static void Stop()
     {
-        if (_fullscreen != null) _fullscreen.FullScreenApps.CollectionChanged -= OnFullscreenChanged;
+        if (_fullscreen != null) _fullscreen.Changed -= OnFullscreenChanged;
         _leaveDelay?.Stop();
         Set(false);
     }

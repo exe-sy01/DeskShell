@@ -152,7 +152,7 @@ public partial class App : Application
         _ = GameLibrary.RefreshAsync();
 
         // Game mode: while something runs fullscreen, get out of the way and do as little as possible.
-        GameMode.Start(Shell.FullScreenHelper);
+        GameMode.Start(Fullscreen);
         GameMode.Changed += on =>
         {
             BadgeService.Instance.SetPaused(on);

@@ -28,6 +28,12 @@ public sealed class FullscreenWatcher : IDisposable
 
     public bool IsCovered(IntPtr monitor) => _covered.Contains(monitor);
 
+    /// <summary>The window in use fills its screen (a game or video in front): what game mode and Alt+Tab go by.</summary>
+    public bool ForegroundFullscreen { get; private set; }
+
+    /// <summary>That window's title, for the log.</summary>
+    public string? ForegroundTitle { get; private set; }
+
     /// <summary>Checks now and again shortly (apps often go fullscreen just after they're activated).</summary>
     public void CheckSoon()
     {
@@ -41,6 +47,8 @@ public sealed class FullscreenWatcher : IDisposable
     {
         var covered = new HashSet<IntPtr>();
         var decided = new HashSet<IntPtr>();
+        var foreground = GetForegroundWindow();
+        var foregroundFullscreen = false;
         // EnumWindows walks top-level windows from the top of the z-order down; the first real
         // window on each monitor decides whether that monitor is covered.
         EnumWindows((hwnd, _) =>
@@ -51,10 +59,11 @@ public sealed class FullscreenWatcher : IDisposable
             var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
             if (!GetMonitorInfo(monitor, ref info)) return true;
             var m = info.rcMonitor;
-            if (rect.Left <= m.Left && rect.Top <= m.Top && rect.Right >= m.Right && rect.Bottom >= m.Bottom)
+            if (rect.Left <= m.Left && rect.Top <= m.Top && rect.Right >= m.Right && rect.Bottom >= m.Bottom && !IsMaximisedApp(hwnd))
             {
                 covered.Add(monitor);
                 decided.Add(monitor);
+                if (hwnd == foreground) foregroundFullscreen = true;
             }
             // An always-on-top window that doesn't fill the screen (a mini player, a widget) floats
             // over whatever is underneath, so it doesn't decide.
@@ -65,8 +74,10 @@ public sealed class FullscreenWatcher : IDisposable
             return true;
         }, IntPtr.Zero);
 
-        if (covered.SetEquals(_covered)) return;
+        if (covered.SetEquals(_covered) && foregroundFullscreen == ForegroundFullscreen) return;
         _covered = covered;
+        ForegroundFullscreen = foregroundFullscreen;
+        ForegroundTitle = foregroundFullscreen ? TitleOf(foreground) : null;
         Log.Info($"Fullscreen: {covered.Count} monitor(s) covered");
         Changed?.Invoke();
     }
@@ -88,9 +99,25 @@ public sealed class FullscreenWatcher : IDisposable
         return rect.Right - rect.Left <= 0 || rect.Bottom - rect.Top <= 0;
     }
 
+    /// <summary>
+    /// An ordinary maximised window (it has a resizable frame). With nothing reserved at the screen's
+    /// edges it fills the whole monitor, but it's an app in normal use, not a game or video.
+    /// Borderless games that maximise themselves have no frame, so they still count.
+    /// </summary>
+    static bool IsMaximisedApp(IntPtr hwnd) => IsZoomed(hwnd) && (GetWindowLong(hwnd, GWL_STYLE) & WS_THICKFRAME) != 0;
+
+    static string TitleOf(IntPtr hwnd)
+    {
+        var title = new StringBuilder(256);
+        GetWindowText(hwnd, title, title.Capacity);
+        return title.ToString();
+    }
+
     public void Dispose() => _timer.Stop();
 
     const int GWL_EXSTYLE = -20;
+    const int GWL_STYLE = -16;
+    const int WS_THICKFRAME = 0x40000;
     const int WS_EX_TOPMOST = 0x8;
     const int WS_EX_TRANSPARENT = 0x20;
     const int WS_EX_TOOLWINDOW = 0x80;
@@ -106,6 +133,9 @@ public sealed class FullscreenWatcher : IDisposable
     [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc callback, IntPtr lParam);
     [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern bool IsZoomed(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);
     [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hwnd, int index);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);

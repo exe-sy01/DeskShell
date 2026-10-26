@@ -292,8 +292,9 @@ internal sealed class AltTabController : IDisposable
         };
 
         _heartbeat = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Normal, (_, _) => _hook.Beat(), Dispatcher.CurrentDispatcher);
-        shell.FullScreenHelper.FullScreenApps.CollectionChanged += (_, _) =>
-            _hook.Suspended = shell.FullScreenHelper.FullScreenApps.Count > 0;
+        // Windows' own Alt+Tab while a game or video is in front.
+        if (App.Fullscreen != null)
+            App.Fullscreen.Changed += () => _hook.Suspended = App.Fullscreen.ForegroundFullscreen;
     }
 
     public bool Enabled { set => _hook.Enabled = value; }
