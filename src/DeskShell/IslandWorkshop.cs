@@ -52,6 +52,9 @@ public static class IslandWorkshop
         island.ActiveWindowTitle = Bool("activeTitle", island.ActiveWindowTitle);
         island.IconSize = Math.Clamp(Num("iconSize", island.IconSize), 12, 28);
 
+        island.ShowCalls = Bool("calls", island.ShowCalls);
+        island.JumpToCall = Bool("callJump", island.JumpToCall);
+        island.CallKeepsOpen = Bool("callKeepsOpen", island.CallKeepsOpen);
         island.JumpToMusic = Bool("autoMusic", island.JumpToMusic);
         island.JumpToNotifications = Bool("autoNotify", island.JumpToNotifications);
         island.GrowForNotifications = Bool("notifyGrow", island.GrowForNotifications);

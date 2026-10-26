@@ -37,6 +37,7 @@ DeskShell doesn't include its own file manager; it's set up alongside [Files](ht
 - **Music**: what's playing, with previous / play-pause / next
 - **Open windows**: their icons; click to switch, click again to minimise, right-click to pin, minimise or close
 - **Programs**: your pinned apps, files and folders; drag files onto the island to pin them
+- **Voice call** (while you're in a Discord call): the channel and everyone in it; whoever's speaking glows. Sent by the AIChat Vencord plugin (`deskshell.ts`) to DeskShell on `127.0.0.1:47390`, which only accepts Discord's own pages.
 
 **Double-click the island** and it grows into the shell (and shrinks back into it when the shell closes). It hides while a fullscreen or borderless window (a game, a video) fills its monitor, and maximised windows sit below it. Settings → Island can put one on every monitor or stop reserving the space. Its size, look, pages, peek mode, notification moments and the shell's animation are designed in Island Workshop (an artifact): press *Copy settings* there, then *Paste from Island Workshop* in DeskShell's settings (or run `DeskShell.exe --apply-island <file.json>`).
 

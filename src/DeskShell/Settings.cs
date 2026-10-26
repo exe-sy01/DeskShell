@@ -85,6 +85,14 @@ public sealed class IslandStyle
     public bool ActiveWindowTitle { get; set; }
     public double IconSize { get; set; } = 18;
 
+    // Discord voice calls (sent by the AIChat Vencord plugin)
+    /// <summary>A Voice call page appears while you're in a Discord call.</summary>
+    public bool ShowCalls { get; set; } = true;
+    /// <summary>Switch to it when you join a call.</summary>
+    public bool JumpToCall { get; set; } = true;
+    /// <summary>Don't shrink to the peek bar during a call, so you can see who's speaking.</summary>
+    public bool CallKeepsOpen { get; set; } = true;
+
     // Dynamic moments
     public bool JumpToMusic { get; set; }
     public bool JumpToNotifications { get; set; }

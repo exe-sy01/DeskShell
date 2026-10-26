@@ -120,6 +120,7 @@ public partial class App : Application
         Fullscreen = new FullscreenWatcher();
         _ = Media.StartAsync();
         NotificationWatcher.Start();
+        DiscordVoice.Start();
         CreateBars();
         StartWatchingSystem();
 
@@ -402,6 +403,7 @@ public partial class App : Application
         {
             _watcher?.Dispose();
             NotificationWatcher.Stop();
+            DiscordVoice.Stop();
             Fullscreen?.Dispose();
             UpdateService.Stop();
             _hotkeys?.Dispose();

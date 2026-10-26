@@ -29,7 +29,8 @@ public partial class IslandWindow : Window
 
     static readonly Dictionary<string, string> PageNames = new()
     {
-        ["notifications"] = "Notifications", ["music"] = "Music", ["windows"] = "Open windows", ["programs"] = "Programs", ["clock"] = "Clock"
+        ["notifications"] = "Notifications", ["music"] = "Music", ["windows"] = "Open windows", ["programs"] = "Programs", ["clock"] = "Clock",
+        ["call"] = "Voice call"
     };
 
     public static readonly DependencyProperty IconSizeProperty =
@@ -53,7 +54,8 @@ public partial class IslandWindow : Window
     IslandStyle _style = App.Settings.Island;
     List<string> _pages = new();
     int _page;
-    bool _allowClose, _menuOpen, _peeking, _inMoment, _hovered;
+    bool _allowClose, _menuOpen, _peeking, _inMoment, _hovered, _inCall;
+    string? _pageBeforeCall;
     string? _pageBeforeMoment;
     string? _lastTrack;
     bool _lastPlaying;
@@ -81,6 +83,13 @@ public partial class IslandWindow : Window
     readonly StackPanel _clockPage = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     readonly TextBlock _clockTime = Line(17, bold: true);
     readonly TextBlock _clockDate = Line(12, dim: true);
+    readonly Grid _callPage = new();
+    readonly TextBlock _callChannel = Line(12.5, bold: true);
+    readonly TextBlock _callServer = Line(11, dim: true);
+    readonly StackPanel _callPeople = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+    readonly TextBlock _callMore = Line(11, dim: true);
+    readonly Dictionary<string, PeerView> _peerViews = new();
+    static readonly Dictionary<string, ImageSource> AvatarCache = new();
 
     public AppBarScreen Screen { get; private set; }
 
@@ -118,6 +127,7 @@ public partial class IslandWindow : Window
 
         _media.Changed += OnMediaChanged;
         NotificationWatcher.Arrived += OnNotification;
+        DiscordVoice.Changed += OnCallChanged;
         DockPins.Items.CollectionChanged += (_, _) => UpdateEmptyStates();
         if (_windows is System.Collections.Specialized.INotifyCollectionChanged changes)
             changes.CollectionChanged += (_, _) => UpdateEmptyStates();
@@ -130,6 +140,7 @@ public partial class IslandWindow : Window
         {
             _media.Changed -= OnMediaChanged;
             NotificationWatcher.Arrived -= OnNotification;
+            DiscordVoice.Changed -= OnCallChanged;
             _pageTimer.Stop();
             _momentTimer.Stop();
             if (App.Fullscreen != null) App.Fullscreen.Changed -= UpdateVisibility;
@@ -185,10 +196,9 @@ public partial class IslandWindow : Window
         _notificationBody.Visibility = s.NotificationText && _notificationBody.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateBars();
 
-        _pages = s.Pages.Where(PageNames.ContainsKey).Distinct().ToList();
-        if (_pages.Count == 0) _pages = ["windows"];
-        var start = s.StartOnLastPage ? _pages.IndexOf(App.Settings.IslandPage) : 0;
-        ShowPage(Math.Max(0, start), 0);
+        _inCall = s.ShowCalls && DiscordVoice.Current != null;
+        UpdateCallPage();
+        RebuildPages(s.StartOnLastPage ? App.Settings.IslandPage : null);
 
         _peeking = false;
         if (s.Peek) SetPeek(true, animate: false);
@@ -271,7 +281,7 @@ public partial class IslandWindow : Window
 
     void SetPeek(bool peek, bool animate = true)
     {
-        if (peek && (!_style.Peek || _hovered || _menuOpen || _inMoment)) return;
+        if (peek && (!_style.Peek || _hovered || _menuOpen || _inMoment || (_inCall && _style.CallKeepsOpen))) return;
         if (peek == _peeking) return;
         _peeking = peek;
         var width = peek ? PeekWidth : _style.Width;
@@ -355,6 +365,17 @@ public partial class IslandWindow : Window
         _programsPage.Children.Add(_noPrograms);
         UpdateEmptyStates();
 
+        // Voice call: channel / server · the people in it, speakers glowing
+        var headset = new Grid { Width = 26, Height = 26 };
+        headset.Children.Add(Glyph("\uE7F6", 13));
+        var callTexts = Stack(_callChannel, _callServer);
+        callTexts.Margin = new Thickness(6, 0, 8, 0);
+        var people = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        _callMore.Margin = new Thickness(4, 0, 2, 0);
+        people.Children.Add(_callPeople);
+        people.Children.Add(_callMore);
+        Columns(_callPage, headset, callTexts, people);
+
         // Clock: time · date
         _clockTime.FontFamily = (FontFamily)FindResource("DisplayFont");
         _clockDate.Margin = new Thickness(10, 3, 0, 0);
@@ -364,12 +385,22 @@ public partial class IslandWindow : Window
 
     string CurrentPage => _pages[_page];
 
+    /// <summary>The chosen pages, with the voice call first while you're in one. Keeps <paramref name="keep"/> showing if it's still there.</summary>
+    void RebuildPages(string? keep)
+    {
+        _pages = _style.Pages.Where(p => PageNames.ContainsKey(p) && p != "call").Distinct().ToList();
+        if (_pages.Count == 0) _pages = ["windows"];
+        if (_inCall) _pages.Insert(0, "call");
+        ShowPage(Math.Max(0, keep == null ? 0 : _pages.IndexOf(keep)), 0);
+    }
+
     UIElement PageContent(string page) => page switch
     {
         "notifications" => _notificationsPage,
         "music" => _musicPage,
         "windows" => _windowsPage,
         "clock" => _clockPage,
+        "call" => _callPage,
         _ => _programsPage
     };
 
@@ -597,6 +628,135 @@ public partial class IslandWindow : Window
         if (restorePage && _pageBeforeMoment != null) ShowPage(_pageBeforeMoment);
         _pageBeforeMoment = null;
         if (_style.Peek && !_hovered) _peekTimer.Start();
+    }
+
+    // ---------- Discord voice call ----------
+
+    sealed class PeerView
+    {
+        public required Grid Root;
+        public required Ellipse Ring;
+        public required Ellipse Photo;
+        public required TextBlock Initial;
+        public required Border Badge;
+        public string? Avatar;
+        public bool Speaking;
+    }
+
+    void OnCallChanged()
+    {
+        var inCall = _style.ShowCalls && DiscordVoice.Current != null;
+        UpdateCallPage();
+        if (inCall == _inCall) return;
+
+        var current = CurrentPage;
+        _inCall = inCall;
+        if (inCall)
+        {
+            RebuildPages(current);
+            SetPeek(false);
+            if (_style.JumpToCall && Pill.Visibility == Visibility.Visible)
+            {
+                _pageBeforeCall = current;
+                ShowPage("call");
+            }
+        }
+        else
+        {
+            RebuildPages(current == "call" ? _pageBeforeCall : current);
+            _pageBeforeCall = null;
+            if (_style.Peek && !_hovered) _peekTimer.Start();
+        }
+    }
+
+    /// <summary>Shows the call's channel and people; as many avatars as fit, then "+N".</summary>
+    void UpdateCallPage()
+    {
+        var call = DiscordVoice.Current;
+        if (call == null) return;
+        _callChannel.Text = call.Channel;
+        _callServer.Text = call.Server ?? "";
+        _callServer.Visibility = string.IsNullOrEmpty(call.Server) ? Visibility.Collapsed : Visibility.Visible;
+        _callPage.ToolTip = $"{call.Channel}{(call.Server != null ? " · " + call.Server : "")}\n" + string.Join("\n", call.Peers.Select(p => p.Name));
+
+        // Room for avatars: the content area minus the headset glyph and some text
+        var room = Math.Max(26, _style.Width - 2 * 33 - 26 - 70);
+        var fit = Math.Max(1, (int)(room / 26));
+        var shown = call.Peers.Count > fit ? call.Peers.Take(fit - 1).ToList() : call.Peers.ToList();
+        _callMore.Text = call.Peers.Count > shown.Count ? $"+{call.Peers.Count - shown.Count}" : "";
+        _callMore.Visibility = _callMore.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        foreach (var gone in _peerViews.Keys.Except(call.Peers.Select(p => p.Id)).ToList()) _peerViews.Remove(gone);
+        _callPeople.Children.Clear();
+        foreach (var peer in shown)
+        {
+            if (!_peerViews.TryGetValue(peer.Id, out var view)) _peerViews[peer.Id] = view = MakePeerView();
+            UpdatePeerView(view, peer);
+            _callPeople.Children.Add(view.Root);
+        }
+    }
+
+    PeerView MakePeerView()
+    {
+        var ring = new Ellipse { Width = 26, Height = 26, StrokeThickness = 2, Opacity = 0 };
+        ring.SetResourceReference(Shape.StrokeProperty, "AccentBrush");
+        ring.Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Accent(), BlurRadius = 10, ShadowDepth = 0, Opacity = 0.95 };
+        var photo = new Ellipse { Width = 20, Height = 20, Fill = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)) };
+        var initial = Line(10, bold: true);
+        initial.HorizontalAlignment = HorizontalAlignment.Center;
+        var badge = new Border
+        {
+            Width = 10, Height = 10, CornerRadius = new CornerRadius(5), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
+            Background = new SolidColorBrush(Color.FromRgb(0xC4, 0x2B, 0x1C)), BorderBrush = Brushes.Black, BorderThickness = new Thickness(1),
+            Child = Glyph("\uE720", 6), Visibility = Visibility.Collapsed
+        };
+        ((TextBlock)badge.Child).Foreground = Brushes.White;
+        var root = new Grid { Width = 26, Height = 26, Margin = new Thickness(0, 0, 2, 0) };
+        root.Children.Add(ring);
+        root.Children.Add(photo);
+        root.Children.Add(initial);
+        root.Children.Add(badge);
+        return new PeerView { Root = root, Ring = ring, Photo = photo, Initial = initial, Badge = badge };
+    }
+
+    void UpdatePeerView(PeerView view, VoicePeer peer)
+    {
+        if (view.Avatar != peer.Avatar)
+        {
+            view.Avatar = peer.Avatar;
+            var image = peer.Avatar != null ? Avatar(peer.Avatar) : null;
+            view.Photo.Fill = image != null ? new ImageBrush(image) { Stretch = Stretch.UniformToFill } : new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF));
+        }
+        view.Initial.Text = view.Avatar == null && peer.Name.Length > 0 ? peer.Name[..1].ToUpperInvariant() : "";
+        view.Badge.Visibility = peer.Muted || peer.Deafened ? Visibility.Visible : Visibility.Collapsed;
+        ((TextBlock)view.Badge.Child).Text = peer.Deafened ? "\uE74F" : "\uE720";
+        view.Root.ToolTip = peer.Name + (peer.Deafened ? " · deafened" : peer.Muted ? " · muted" : "");
+        if (view.Speaking == peer.Speaking) return;
+        view.Speaking = peer.Speaking;
+        // The glow: a ring in the accent colour fades in while they talk
+        view.Ring.BeginAnimation(OpacityProperty, new DoubleAnimation(peer.Speaking ? 1 : 0, TimeSpan.FromMilliseconds(peer.Speaking ? 90 : 250)));
+    }
+
+    /// <summary>Discord avatars, downloaded once and kept for the session.</summary>
+    static ImageSource? Avatar(string url)
+    {
+        if (AvatarCache.TryGetValue(url, out var cached)) return cached;
+        try
+        {
+            var image = new System.Windows.Media.Imaging.BitmapImage();
+            image.BeginInit();
+            image.UriSource = new Uri(url);
+            image.DecodePixelWidth = 64;
+            image.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            image.EndInit();
+            AvatarCache[url] = image;
+            return image;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Couldn't load a Discord avatar", ex);
+            return null;
+        }
     }
 
     // ---------- pinned programs ----------
