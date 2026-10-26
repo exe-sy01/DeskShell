@@ -1,0 +1,875 @@
+<title>Island Workshop</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a dark "desk" stage with the live island on top, settings in two columns of grouped panels below.
+   One committed dark look (the island is always black), with the user's purple accent. */
+:root {
+  color-scheme: dark;
+  --bg: #0e0d11;
+  --surface: #16151a;
+  --surface-2: #1e1c23;
+  --line: #2a2731;
+  --fg: #f1eef4;
+  --dim: #a5a0ad;
+  --faint: #6f6a78;
+  --accent: #d29edb;
+  --accent-ink: #1b0f1f;
+  --ember: #ff5a36;
+  --good: #8bd5a6;
+  --warn: #f0b96a;
+  --font-display: "Bricolage Grotesque", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Figtree", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --radius: 14px;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--fg); }
+body {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 22px; }
+
+/* ---------- header ---------- */
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 14px 24px; }
+.title h1 {
+  font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 4vw, 40px);
+  letter-spacing: -0.02em; line-height: 1.05; margin: 0; text-wrap: balance;
+}
+.title p { margin: 8px 0 0; color: var(--dim); max-width: 62ch; }
+.header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.status {
+  display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--dim);
+  padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
+}
+.status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.status[data-state="saved"]::before { background: var(--good); }
+.status[data-state="saving"]::before { background: var(--accent); }
+.status[data-state="error"]::before { background: var(--warn); }
+.btn {
+  font: inherit; font-size: 13.5px; font-weight: 500; color: var(--fg); background: var(--surface-2);
+  border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; cursor: pointer;
+}
+.btn:hover { border-color: #3a3642; background: #24222a; }
+.btn:focus-visible, .seg button:focus-visible, .sw input:focus-visible + span, input[type=range]:focus-visible, .pages-list button:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.danger-armed { border-color: var(--warn); color: var(--warn); }
+
+/* ---------- stage ---------- */
+.stage {
+  border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+  background: var(--surface);
+}
+.screen {
+  position: relative; height: 330px; overflow: hidden; isolation: isolate;
+  background:
+    radial-gradient(120% 70% at 18% 115%, rgba(255, 90, 54, 0.22), transparent 60%),
+    radial-gradient(90% 60% at 88% 120%, rgba(255, 90, 54, 0.12), transparent 60%),
+    linear-gradient(180deg, #121116 0%, #0b0a0e 100%);
+}
+.screen::after { /* a maximised window under the island */
+  content: ""; position: absolute; left: 6%; right: 6%; top: var(--work-top, 0px); bottom: -2px;
+  border-radius: 8px 8px 0 0; background: rgba(255, 255, 255, 0.025); border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: top 0.25s ease;
+}
+.reserve-line {
+  position: absolute; left: 0; right: 0; top: var(--work-top, 0px); height: 0;
+  border-top: 1px dashed rgba(210, 158, 219, 0.45); z-index: 1; transition: top 0.25s ease;
+}
+.reserve-line span {
+  position: absolute; right: 12px; top: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--accent); opacity: 0.85;
+}
+
+.island-zone {
+  position: absolute; left: 50%; top: 0; z-index: 3;
+  transform: translateX(-50%) scale(var(--fit, 1)); transform-origin: top center;
+  padding: var(--top, 8px) 24px 24px; /* generous hover zone, like the real window */
+}
+.pill {
+  --r: 20px;
+  position: relative; width: var(--w, 420px); height: var(--h, 40px); border-radius: var(--r);
+  background: var(--pill-bg, #000); border: 1px solid var(--pill-edge, rgba(255,255,255,0.12));
+  box-shadow: var(--pill-shadow, 0 4px 16px rgba(0,0,0,0.5));
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; padding: 0 5px;
+  color: #fff; user-select: none; cursor: default;
+  transform: scale(1); transform-origin: top center;
+  transition: transform 0.16s ease-out, width 0.3s cubic-bezier(.34,1.3,.64,1), height 0.3s cubic-bezier(.34,1.3,.64,1), opacity 0.15s;
+  backdrop-filter: var(--pill-blur, none);
+}
+.island-zone:hover .pill { transform: scale(var(--grow, 1.025)); }
+.pill.tall { height: calc(var(--h, 40px) + 26px); }
+.pill .arrow {
+  width: 28px; height: 28px; border-radius: 50%; border: 0; background: transparent; color: #b9b5c0;
+  display: grid; place-items: center; cursor: pointer; transition: background 0.15s, color 0.15s, opacity 0.15s;
+}
+.pill .arrow:hover { background: rgba(255,255,255,0.13); color: #fff; }
+.pill .arrow svg { width: 10px; height: 10px; }
+.pill.arrows-hover .arrow { opacity: 0; }
+.island-zone:hover .pill.arrows-hover .arrow { opacity: 1; }
+.pill.arrows-hidden { grid-template-columns: 0 minmax(0, 1fr) 0; padding: 0 12px; }
+.pill.arrows-hidden .arrow { display: none; }
+.viewport { position: relative; overflow: hidden; height: 100%; margin: 0 4px; display: flex; align-items: center; }
+.page { width: 100%; display: flex; align-items: center; gap: 9px; min-width: 0; }
+.page.enter-next { animation: slide-next 0.2s ease-out; }
+.page.enter-prev { animation: slide-prev 0.2s ease-out; }
+@keyframes slide-next { from { transform: translateX(28px); opacity: 0; } }
+@keyframes slide-prev { from { transform: translateX(-28px); opacity: 0; } }
+.dots { position: absolute; left: 50%; bottom: 3px; transform: translateX(-50%); display: flex; gap: 4px; }
+.dots i { width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,0.28); }
+.dots i.on { background: #fff; }
+
+/* peek: a thin bar until the mouse comes near */
+.island-zone.peek:not(:hover) .pill { width: 140px; height: 7px; padding: 0; }
+.island-zone.peek:not(:hover) .pill > * { opacity: 0; pointer-events: none; }
+
+/* page content */
+.p-texts { min-width: 0; flex: 1; display: grid; }
+.p-title, .p-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-title { font-size: 12.5px; font-weight: 600; }
+.p-sub { font-size: 11px; color: #b9b5c0; }
+.p-art { width: 26px; height: 26px; border-radius: 6px; flex: none; background: linear-gradient(135deg, #ff7a59, #a347b5 60%, #3b2a8c); }
+.p-icon { width: 26px; height: 26px; flex: none; display: grid; place-items: center; }
+.p-icon svg { width: 14px; height: 14px; }
+.p-ctrls { display: flex; flex: none; }
+.p-ctrls span { width: 26px; height: 26px; display: grid; place-items: center; color: #d6d2dc; }
+.p-ctrls svg { width: 11px; height: 11px; }
+.p-count { flex: none; min-width: 20px; height: 20px; border-radius: 10px; padding: 0 6px; display: grid; place-items: center;
+  background: rgba(255,255,255,0.15); font-size: 11px; font-weight: 600; }
+.bars { display: flex; align-items: end; gap: 2px; height: 14px; flex: none; margin-right: 4px; }
+.bars i { width: 3px; border-radius: 1px; background: var(--accent); animation: bar 0.9s ease-in-out infinite alternate; }
+.bars i:nth-child(2) { animation-delay: -0.3s; } .bars i:nth-child(3) { animation-delay: -0.6s; } .bars i:nth-child(4) { animation-delay: -0.15s; }
+@keyframes bar { from { height: 3px; } to { height: 14px; } }
+.icons { flex: 1; display: flex; justify-content: center; gap: 2px; min-width: 0; overflow: hidden; padding: 0 22px; }
+.app { position: relative; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+.app b { width: var(--icon, 18px); height: var(--icon, 18px); border-radius: 5px; display: grid; place-items: center;
+  font-size: calc(var(--icon, 18px) * 0.55); font-weight: 700; color: #fff; font-family: var(--font-body); }
+.app.active::after { content: ""; position: absolute; bottom: 1px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--accent); }
+.app-title { font-size: 12px; color: #e7e3ea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; margin-left: 2px; }
+.clock { flex: 1; display: flex; align-items: baseline; justify-content: center; gap: 10px; }
+.clock strong { font-family: var(--font-display); font-size: 17px; font-weight: 700; letter-spacing: 0.01em; font-variant-numeric: tabular-nums; }
+.clock span { font-size: 12px; color: #b9b5c0; }
+.empty-note { flex: 1; text-align: center; font-size: 12px; color: #b9b5c0; }
+
+/* the shell growing out of the island */
+.dim { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 2; transition: opacity 0.2s; }
+.dim.on { pointer-events: auto; }
+.shell {
+  position: absolute; z-index: 4; background: #000; border: 1px solid rgba(255,255,255,0.12);
+  overflow: hidden; display: none;
+}
+.shell.on { display: block; }
+.shell-content { position: absolute; inset: 0; padding: 18px 20px; opacity: 0; transition: opacity 0.18s; display: grid; grid-template-rows: auto 1fr; gap: 12px; }
+.shell.show-content .shell-content { opacity: 1; }
+.shell-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.shell-top strong { font-family: var(--font-display); font-size: 26px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.shell-top span { font-size: 12px; color: #b9b5c0; }
+.shell-search { height: 28px; width: 46%; border-radius: 8px; background: rgba(255,255,255,0.07); border-bottom: 2px solid var(--accent); }
+.shell-tiles { display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 1fr; gap: 8px; min-height: 0; }
+.shell-tiles i { border-radius: 8px; background: rgba(255,255,255,0.06); }
+.shell-tiles i.wide { grid-column: span 2; }
+.shell-tiles i.on { background: var(--accent); opacity: 0.85; }
+.side-panel { position: absolute; z-index: 4; background: #000; border: 1px solid rgba(255,255,255,0.12); opacity: 0; transition: opacity 0.2s; display: none; }
+.side-panel.on { display: block; }
+.side-panel.show { opacity: 1; }
+.side-panel::before { content: ""; position: absolute; inset: 12px; background:
+  linear-gradient(rgba(255,255,255,0.06), rgba(255,255,255,0.06)) 0 0 / 46% 38% no-repeat,
+  linear-gradient(rgba(255,255,255,0.06), rgba(255,255,255,0.06)) 100% 0 / 46% 38% no-repeat,
+  linear-gradient(rgba(255,255,255,0.06), rgba(255,255,255,0.06)) 0 100% / 46% 38% no-repeat; border-radius: 6px; }
+
+.stage-bar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px;
+  padding: 12px 16px; border-top: 1px solid var(--line);
+}
+.stage-bar .hint { font-size: 13px; color: var(--dim); }
+.stage-bar .hint kbd { font-family: var(--font-mono); font-size: 12px; color: var(--fg); background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; }
+.stage-bar .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---------- settings ---------- */
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 18px 8px; min-width: 0; }
+.panel h2 { font-family: var(--font-display); font-weight: 700; font-size: 19px; letter-spacing: -0.01em; margin: 0; }
+.panel > p { margin: 4px 0 10px; color: var(--dim); font-size: 13.5px; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 14px; padding: 11px 0; border-top: 1px solid var(--line); }
+.row:first-of-type { border-top: 0; }
+.row label, .row .label { font-size: 14px; }
+.row .key { display: block; font-family: var(--font-mono); font-size: 10.5px; color: var(--faint); letter-spacing: 0.02em; }
+.row.stack { grid-template-columns: minmax(0, 1fr); }
+.range { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.range output { font-family: var(--font-mono); font-size: 12.5px; color: var(--fg); min-width: 58px; text-align: right; font-variant-numeric: tabular-nums; }
+input[type=range] { -webkit-appearance: none; appearance: none; width: 170px; max-width: 100%; height: 22px; background: transparent; cursor: pointer; }
+input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--accent) var(--pct, 50%), #34303b var(--pct, 50%)); }
+input[type=range]::-moz-range-track { height: 4px; border-radius: 2px; background: #34303b; }
+input[type=range]::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--accent); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); }
+input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
+.seg button { font: inherit; font-size: 12.5px; color: var(--dim); background: transparent; border: 0; border-radius: 7px; padding: 5px 10px; cursor: pointer; }
+.seg button[aria-checked="true"] { background: var(--surface-2); color: var(--fg); box-shadow: inset 0 0 0 1px #3a3642; }
+.sw { position: relative; display: inline-block; width: 40px; height: 22px; flex: none; }
+.sw input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.sw span { position: absolute; inset: 0; border-radius: 11px; background: #34303b; transition: background 0.15s; pointer-events: none; }
+.sw span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.15s; }
+.sw input:checked + span { background: var(--accent); }
+.sw input:checked + span::after { transform: translateX(18px); background: var(--accent-ink); }
+
+.pages-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
+.pages-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
+.pages-list li.off { opacity: 0.55; }
+.pages-list .name { font-size: 14px; }
+.pages-list .name small { display: block; color: var(--dim); font-size: 12px; }
+.pages-list .move { display: flex; gap: 4px; }
+.pages-list .move button { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; display: grid; place-items: center; }
+.pages-list .move button:disabled { opacity: 0.3; cursor: default; }
+.pages-list .move svg { width: 10px; height: 10px; }
+
+.notes textarea {
+  width: 100%; min-height: 110px; resize: vertical; font: inherit; font-size: 14px; color: var(--fg);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 6px 0 12px;
+}
+footer { color: var(--faint); font-size: 13px; text-align: center; }
+@media (max-width: 520px) {
+  .row { grid-template-columns: minmax(0, 1fr); }
+  input[type=range] { width: 100%; }
+  .range { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001s !important; transition-duration: 0.001s !important; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="title">
+      <h1>Island Workshop</h1>
+      <p>Shape the DeskShell island here. The preview is live and every change saves straight away, so Claude can read your settings and build exactly this.</p>
+    </div>
+    <div class="header-actions">
+      <span class="status" id="status" data-state="idle" role="status">Loading your settings…</span>
+      <button class="btn" id="copyBtn" type="button">Copy settings</button>
+      <button class="btn" id="resetBtn" type="button">Back to the current island</button>
+    </div>
+  </header>
+
+  <section class="stage" aria-label="Live preview">
+    <div class="screen" id="screen">
+      <div class="reserve-line" id="reserveLine"><span>maximised windows start here</span></div>
+      <div class="island-zone" id="zone">
+        <div class="pill" id="pill">
+          <button class="arrow" id="prevBtn" type="button" aria-label="Previous page">
+            <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 1.5 3 5l3.5 3.5"/></svg>
+          </button>
+          <div class="viewport"><div class="page" id="page"></div></div>
+          <button class="arrow" id="nextBtn" type="button" aria-label="Next page">
+            <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 1.5 7 5 3.5 8.5"/></svg>
+          </button>
+          <div class="dots" id="dots" hidden></div>
+        </div>
+      </div>
+      <div class="dim" id="dim"></div>
+      <div class="side-panel" id="sideLeft"></div>
+      <div class="side-panel" id="sideRight"></div>
+      <div class="shell" id="shell">
+        <div class="shell-content">
+          <div class="shell-top"><div><strong id="shellClock">05:12</strong> <span id="shellDate">Monday 26 October</span></div><div class="shell-search"></div></div>
+          <div class="shell-tiles"><i class="wide"></i><i></i><i class="on"></i><i></i><i class="wide"></i><i class="wide"></i><i></i><i></i></div>
+        </div>
+      </div>
+    </div>
+    <div class="stage-bar">
+      <span class="hint" id="openHint">Double-click the island to open the shell. <kbd>Esc</kbd> or a click outside closes it.</span>
+      <div class="actions">
+        <button class="btn" id="testNotify" type="button">Send a test notification</button>
+        <button class="btn" id="testSong" type="button">Start a song</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid" id="grid"></div>
+
+  <section class="panel notes">
+    <h2>Anything else</h2>
+    <p>Ideas the controls don't cover: a page you'd like, how something should feel, things that bug you.</p>
+    <label for="notes" class="label" hidden>Notes for Claude</label>
+    <textarea id="notes" placeholder="e.g. a weather page, or show Discord voice calls on the island"></textarea>
+  </section>
+
+  <footer>Preview apps, songs and notifications are examples. Your settings save to this page; ask Claude to apply them to DeskShell.</footer>
+</div>
+
+<script>
+(() => {
+  // ---------- what can be set (defaults = the island DeskShell has today) ----------
+  const PAGE_INFO = {
+    notifications: ["Notifications", "Latest one and a count; click opens Windows' notification centre"],
+    music: ["Music", "What's playing, with controls"],
+    windows: ["Open windows", "App icons; click to switch or minimise"],
+    programs: ["Programs", "Your pinned apps, files and folders"],
+    clock: ["Clock", "Time and date (new)"]
+  };
+  const DEFAULT_PAGES = [
+    { id: "notifications", on: true }, { id: "music", on: true }, { id: "windows", on: true },
+    { id: "programs", on: true }, { id: "clock", on: false }
+  ];
+
+  const SECTIONS = [
+    { title: "Shape", note: "How big the pill is and what it's made of.", items: [
+      { key: "width", label: "Width", type: "range", min: 300, max: 600, step: 4, unit: "px", def: 420 },
+      { key: "height", label: "Height", type: "range", min: 30, max: 56, step: 1, unit: "px", def: 40 },
+      { key: "roundness", label: "Corner roundness", type: "range", min: 20, max: 100, step: 5, unit: "%", def: 100 },
+      { key: "surface", label: "Surface", type: "seg", def: "black", options: [["black", "Black"], ["glass", "Dark glass"], ["tint", "Accent tint"]] },
+      { key: "edge", label: "Edge", type: "seg", def: "subtle", options: [["none", "None"], ["subtle", "Subtle"], ["accent", "Accent"]] },
+      { key: "shadow", label: "Shadow", type: "seg", def: "soft", options: [["none", "None"], ["soft", "Soft"], ["strong", "Strong"]] }
+    ]},
+    { title: "Placement", note: "Where it sits and when it gets out of the way.", items: [
+      { key: "topGap", label: "Gap from the top of the screen", type: "range", min: 0, max: 24, step: 1, unit: "px", def: 8 },
+      { key: "monitors", label: "Monitors", type: "seg", def: "main", options: [["main", "Main only"], ["all", "Every monitor"]] },
+      { key: "reserveSpace", label: "Keep maximised windows below the island", type: "switch", def: true },
+      { key: "hideFullscreen", label: "Hide when a game or video fills the screen", type: "switch", def: true },
+      { key: "peek", label: "Shrink to a thin bar until the mouse comes near", type: "switch", def: false }
+    ]},
+    { title: "Pages", note: "Turn pages on or off and set their order. ‹ › go through them in this order.", custom: "pages", items: [
+      { key: "startPage", label: "When DeskShell starts", type: "seg", def: "last", options: [["last", "Last page used"], ["first", "First page"]] },
+      { key: "arrows", label: "‹ › arrows", type: "seg", def: "always", options: [["always", "Always"], ["hover", "On hover"], ["hidden", "Hidden"]] },
+      { key: "indicator", label: "Page dots", type: "seg", def: "none", options: [["none", "Off"], ["dots", "On"]] },
+      { key: "wheel", label: "Mouse wheel", type: "seg", def: "icons-first", options: [["icons-first", "Scroll long icon rows first"], ["pages", "Always flip pages"]] }
+    ]},
+    { title: "Page details", note: "What each page shows.", items: [
+      { key: "musicArt", label: "Music: album art", type: "switch", def: true },
+      { key: "musicArtist", label: "Music: artist name", type: "switch", def: true },
+      { key: "musicControls", label: "Music: previous, play, next", type: "switch", def: true },
+      { key: "musicBars", label: "Music: moving bars while a song plays", type: "switch", def: false },
+      { key: "notifBody", label: "Notifications: message text", type: "switch", def: true },
+      { key: "notifCount", label: "Notifications: count", type: "switch", def: true },
+      { key: "windowsScope", label: "Open windows from", type: "seg", def: "all", options: [["all", "Every monitor"], ["monitor", "This monitor"]] },
+      { key: "activeTitle", label: "Open windows: name the one in use", type: "switch", def: false },
+      { key: "iconSize", label: "Icon size", type: "range", min: 14, max: 24, step: 1, unit: "px", def: 18 }
+    ]},
+    { title: "Dynamic moments", note: "What makes it an island: it reacts to what's happening, then settles back. Try the buttons under the preview.", items: [
+      { key: "autoMusic", label: "Jump to Music when a song starts", type: "switch", def: false },
+      { key: "autoNotify", label: "Jump to Notifications when one arrives", type: "switch", def: false },
+      { key: "notifyGrow", label: "Grow taller for a moment when a notification arrives", type: "switch", def: false },
+      { key: "momentSeconds", label: "Go back after", type: "range", min: 2, max: 12, step: 1, unit: "s", def: 5 }
+    ]},
+    { title: "Opening the shell", note: "How the island turns into the shell, and how that feels.", items: [
+      { key: "openWith", label: "Open with", type: "seg", def: "double", options: [["double", "Double-click"], ["single", "Click on empty space"], ["hover", "Hover a moment"]] },
+      { key: "hoverGrow", label: "Grow on hover", type: "range", min: 0, max: 8, step: 0.5, unit: "%", def: 2.5 },
+      { key: "animMs", label: "Expand speed", type: "range", min: 150, max: 700, step: 10, unit: "ms", def: 380 },
+      { key: "bounce", label: "Bounce", type: "range", min: 0, max: 60, step: 2, unit: "%", def: 22 },
+      { key: "dim", label: "Dim the screen behind", type: "range", min: 0, max: 70, step: 5, unit: "%", def: 30 },
+      { key: "shellRadius", label: "Shell corner radius", type: "range", min: 12, max: 40, step: 1, unit: "px", def: 28 },
+      { key: "sidePanels", label: "Open windows in panels beside the shell", type: "switch", def: true }
+    ]}
+  ];
+  const ITEMS = SECTIONS.flatMap(s => s.items);
+  const defaults = () => Object.fromEntries(ITEMS.map(i => [i.key, i.def]));
+
+  let state = defaults();
+  let pages = DEFAULT_PAGES.map(p => ({ ...p }));
+  let notes = "";
+  let pageIndex = 2; // windows, as today
+
+  // ---------- controls ----------
+  const $ = id => document.getElementById(id);
+  const grid = $("grid");
+  const fmt = (item, v) => (item.step < 1 ? Number(v).toFixed(1) : v) + (item.unit === "px" || item.unit === "ms" ? " " + item.unit : item.unit);
+
+  function buildControls() {
+    grid.textContent = "";
+    for (const section of SECTIONS) {
+      const panel = document.createElement("section");
+      panel.className = "panel";
+      panel.innerHTML = `<h2></h2><p></p>`;
+      panel.querySelector("h2").textContent = section.title;
+      panel.querySelector("p").textContent = section.note;
+      if (section.custom === "pages") panel.appendChild(buildPagesEditor());
+      for (const item of section.items) panel.appendChild(buildRow(item));
+      grid.appendChild(panel);
+    }
+  }
+
+  function buildRow(item) {
+    const row = document.createElement("div");
+    row.className = "row";
+    const id = "set-" + item.key;
+    const label = document.createElement(item.type === "seg" ? "span" : "label");
+    label.className = "label";
+    if (item.type !== "seg") label.htmlFor = id; else label.id = id + "-label";
+    label.textContent = item.label;
+    row.appendChild(label);
+
+    if (item.type === "range") {
+      const box = document.createElement("div");
+      box.className = "range";
+      const input = Object.assign(document.createElement("input"), { type: "range", id, min: item.min, max: item.max, step: item.step });
+      const out = document.createElement("output");
+      out.htmlFor = id;
+      input.addEventListener("input", () => set(item.key, Number(input.value)));
+      box.append(input, out);
+      row.appendChild(box);
+    } else if (item.type === "seg") {
+      const seg = document.createElement("div");
+      seg.className = "seg";
+      seg.setAttribute("role", "radiogroup");
+      seg.setAttribute("aria-labelledby", id + "-label");
+      seg.id = id;
+      for (const [value, text] of item.options) {
+        const b = Object.assign(document.createElement("button"), { type: "button", textContent: text });
+        b.setAttribute("role", "radio");
+        b.dataset.value = value;
+        b.addEventListener("click", () => set(item.key, value));
+        seg.appendChild(b);
+      }
+      row.appendChild(seg);
+      if (item.options.length > 2 || item.options.some(o => o[1].length > 12)) row.classList.add("stack");
+    } else {
+      const sw = document.createElement("span");
+      sw.className = "sw";
+      const input = Object.assign(document.createElement("input"), { type: "checkbox", id });
+      input.setAttribute("role", "switch");
+      input.addEventListener("change", () => set(item.key, input.checked));
+      sw.append(input, document.createElement("span"));
+      row.appendChild(sw);
+    }
+    return row;
+  }
+
+  function syncControls() {
+    for (const item of ITEMS) {
+      const el = $("set-" + item.key);
+      if (!el) continue;
+      const v = state[item.key];
+      if (item.type === "range") {
+        el.value = v;
+        el.style.setProperty("--pct", ((v - item.min) / (item.max - item.min) * 100) + "%");
+        el.nextElementSibling.value = fmt(item, v);
+      } else if (item.type === "seg") {
+        for (const b of el.children) b.setAttribute("aria-checked", String(b.dataset.value === v));
+      } else {
+        el.checked = !!v;
+      }
+    }
+    renderPagesEditor();
+  }
+
+  // pages editor
+  let pagesList;
+  function buildPagesEditor() {
+    pagesList = document.createElement("ul");
+    pagesList.className = "pages-list";
+    return pagesList;
+  }
+  const arrowSvg = d => `<svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+  function renderPagesEditor() {
+    if (!pagesList) return;
+    pagesList.textContent = "";
+    pages.forEach((p, i) => {
+      const li = document.createElement("li");
+      if (!p.on) li.classList.add("off");
+      const id = "page-" + p.id;
+      li.innerHTML = `<span class="sw"><input type="checkbox" role="switch" id="${id}"><span></span></span>
+        <label class="name" for="${id}"></label>
+        <span class="move"><button type="button" aria-label="Move up">${arrowSvg("M1.5 6.5 5 3l3.5 3.5")}</button><button type="button" aria-label="Move down">${arrowSvg("M1.5 3.5 5 7l3.5-3.5")}</button></span>`;
+      const [title, sub] = PAGE_INFO[p.id];
+      const name = li.querySelector(".name");
+      name.textContent = title;
+      const small = document.createElement("small");
+      small.textContent = sub;
+      name.appendChild(small);
+      const box = li.querySelector("input");
+      box.checked = p.on;
+      box.addEventListener("change", () => {
+        if (!box.checked && pages.filter(x => x.on).length === 1) { box.checked = true; return; } // keep at least one
+        p.on = box.checked;
+        changed(true);
+      });
+      const [up, down] = li.querySelectorAll(".move button");
+      up.disabled = i === 0;
+      down.disabled = i === pages.length - 1;
+      up.addEventListener("click", () => { [pages[i - 1], pages[i]] = [pages[i], pages[i - 1]]; changed(true); });
+      down.addEventListener("click", () => { [pages[i + 1], pages[i]] = [pages[i], pages[i + 1]]; changed(true); });
+      pagesList.appendChild(li);
+    });
+  }
+
+  function set(key, value) {
+    state[key] = value;
+    changed(false);
+  }
+  function changed(pagesChanged) {
+    syncControls();
+    if (pagesChanged) clampPage();
+    renderPreview();
+    scheduleSave();
+  }
+
+  // ---------- preview ----------
+  const pill = $("pill"), zone = $("zone"), screen = $("screen"), pageEl = $("page"), dots = $("dots");
+  const live = { count: 3, song: false, notifyText: null };
+  const enabled = () => pages.filter(p => p.on);
+  function clampPage() { pageIndex = Math.min(pageIndex, enabled().length - 1); }
+
+  const ICON = {
+    bell: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M4 11V7a4 4 0 0 1 8 0v4l1.2 1.5H2.8L4 11Z"/><path d="M6.5 14a1.6 1.6 0 0 0 3 0"/></svg>',
+    note: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M6 12V3.5l7-1.5V10"/><circle cx="4.5" cy="12" r="1.8"/><circle cx="11.5" cy="10" r="1.8"/></svg>',
+    prev: '<svg viewBox="0 0 12 12" fill="currentColor"><rect x="1.5" y="2" width="1.4" height="8" rx=".5"/><path d="M10.5 2.3v7.4L4.2 6z"/></svg>',
+    next: '<svg viewBox="0 0 12 12" fill="currentColor"><rect x="9.1" y="2" width="1.4" height="8" rx=".5"/><path d="M1.5 2.3v7.4L7.8 6z"/></svg>',
+    play: '<svg viewBox="0 0 12 12" fill="currentColor"><path d="M3 1.8v8.4L10.2 6z"/></svg>',
+    pause: '<svg viewBox="0 0 12 12" fill="currentColor"><rect x="2.5" y="2" width="2.4" height="8" rx=".6"/><rect x="7.1" y="2" width="2.4" height="8" rx=".6"/></svg>'
+  };
+  // Example apps (generic colours and letters, not real icons)
+  const WINDOWS = [["Browser", "#e8743b", "B", true], ["Chat", "#5865c7", "C"], ["Chat (beta)", "#6f7bd8", "C"], ["Notes", "#e0a63a", "N"], ["Games", "#2b4a6b", "G"], ["Mixer", "#c23b3b", "M"], ["Recorder", "#3d3d46", "R"], ["Files", "#d98c2b", "F"]];
+  const PROGRAMS = [["Files", "#d98c2b", "F"], ["Browser", "#e8743b", "B"], ["Games", "#2b4a6b", "G"], ["Editor", "#2f7d6d", "E"]];
+
+  function appIcons(list, showTitle) {
+    const strip = document.createElement("div");
+    strip.className = "icons";
+    for (const [name, color, letter, active] of list) {
+      const a = document.createElement("span");
+      a.className = "app" + (active ? " active" : "");
+      a.title = name;
+      a.innerHTML = `<b style="background:${color}">${letter}</b>`;
+      strip.appendChild(a);
+      if (active && showTitle) {
+        const t = document.createElement("span");
+        t.className = "app-title";
+        t.textContent = name + " · Example page";
+        strip.appendChild(t);
+      }
+    }
+    return strip;
+  }
+
+  function pageContent(id) {
+    const frag = document.createDocumentFragment();
+    const texts = (title, sub) => {
+      const box = document.createElement("div");
+      box.className = "p-texts";
+      const t = document.createElement("div"); t.className = "p-title"; t.textContent = title; box.appendChild(t);
+      if (sub) { const s = document.createElement("div"); s.className = "p-sub"; s.textContent = sub; box.appendChild(s); }
+      return box;
+    };
+    if (id === "notifications") {
+      const icon = document.createElement("span"); icon.className = "p-icon"; icon.innerHTML = ICON.bell; frag.appendChild(icon);
+      const text = live.notifyText || ["Chat · Alex", "are you on tonight?"];
+      frag.appendChild(texts(text[0], state.notifBody ? text[1] : ""));
+      if (state.notifCount) { const c = document.createElement("span"); c.className = "p-count"; c.textContent = live.count; frag.appendChild(c); }
+    } else if (id === "music") {
+      if (state.musicArt) { const art = document.createElement("span"); art.className = "p-art"; frag.appendChild(art); }
+      else { const icon = document.createElement("span"); icon.className = "p-icon"; icon.innerHTML = ICON.note; frag.appendChild(icon); }
+      frag.appendChild(texts(live.song ? "Night Shift" : "Midnight Drive", state.musicArtist ? "Example Artist" : ""));
+      if (state.musicBars && live.song !== null) {
+        const bars = document.createElement("span"); bars.className = "bars"; bars.innerHTML = "<i></i><i></i><i></i><i></i>"; frag.appendChild(bars);
+      }
+      if (state.musicControls) {
+        const c = document.createElement("span"); c.className = "p-ctrls";
+        c.innerHTML = `<span>${ICON.prev}</span><span>${ICON.pause}</span><span>${ICON.next}</span>`; frag.appendChild(c);
+      }
+    } else if (id === "windows") {
+      frag.appendChild(appIcons(WINDOWS, state.activeTitle));
+    } else if (id === "programs") {
+      frag.appendChild(appIcons(PROGRAMS, false));
+    } else {
+      const now = new Date();
+      const box = document.createElement("div"); box.className = "clock";
+      const strong = document.createElement("strong"); strong.textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const span = document.createElement("span"); span.textContent = now.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+      box.append(strong, span); frag.appendChild(box);
+    }
+    return frag;
+  }
+
+  function showPage(direction) {
+    const list = enabled();
+    const page = list[pageIndex];
+    pageEl.textContent = "";
+    pageEl.appendChild(pageContent(page.id));
+    pageEl.classList.remove("enter-next", "enter-prev");
+    if (direction) { void pageEl.offsetWidth; pageEl.classList.add(direction > 0 ? "enter-next" : "enter-prev"); }
+    $("prevBtn").title = PAGE_INFO[list[(pageIndex - 1 + list.length) % list.length].id][0];
+    $("nextBtn").title = PAGE_INFO[list[(pageIndex + 1) % list.length].id][0];
+    dots.hidden = state.indicator !== "dots" || list.length < 2;
+    dots.innerHTML = list.map((_, i) => `<i class="${i === pageIndex ? "on" : ""}"></i>`).join("");
+  }
+  function flip(direction) {
+    const n = enabled().length;
+    pageIndex = (pageIndex + direction + n) % n;
+    showPage(direction);
+  }
+  function goTo(id) {
+    const i = enabled().findIndex(p => p.id === id);
+    if (i < 0 || i === pageIndex) return false;
+    const dir = i > pageIndex ? 1 : -1;
+    pageIndex = i;
+    showPage(dir);
+    return true;
+  }
+
+  function renderPreview() {
+    const s = state;
+    const r = (s.height / 2) * (s.roundness / 100);
+    pill.style.setProperty("--w", s.width + "px");
+    pill.style.setProperty("--h", s.height + "px");
+    pill.style.setProperty("--r", r + "px");
+    pill.style.setProperty("--icon", s.iconSize + "px");
+    pill.style.borderRadius = r + "px";
+    zone.style.setProperty("--top", s.topGap + "px");
+    zone.style.setProperty("--grow", 1 + s.hoverGrow / 100);
+    const bg = { black: "#000", glass: "rgba(18, 17, 22, 0.66)", tint: "color-mix(in srgb, var(--accent) 16%, #050407)" }[s.surface];
+    pill.style.setProperty("--pill-bg", bg);
+    pill.style.setProperty("--pill-blur", s.surface === "glass" ? "blur(18px) saturate(1.4)" : "none");
+    pill.style.setProperty("--pill-edge", { none: "transparent", subtle: "rgba(255,255,255,0.12)", accent: "color-mix(in srgb, var(--accent) 70%, transparent)" }[s.edge]);
+    pill.style.setProperty("--pill-shadow", { none: "none", soft: "0 4px 16px rgba(0,0,0,0.5)", strong: "0 8px 30px rgba(0,0,0,0.75), 0 0 0 1px rgba(0,0,0,0.6)" }[s.shadow]);
+    pill.classList.toggle("arrows-hover", s.arrows === "hover");
+    pill.classList.toggle("arrows-hidden", s.arrows === "hidden");
+    zone.classList.toggle("peek", !!s.peek);
+    const workTop = s.reserveSpace ? s.topGap + s.height + 6 : 0;
+    screen.style.setProperty("--work-top", workTop + "px");
+    $("reserveLine").hidden = !s.reserveSpace;
+    const hint = { double: "Double-click the island to open the shell.", single: "Click empty space on the island to open the shell.", hover: "Rest the mouse on the island to open the shell." }[s.openWith];
+    $("openHint").innerHTML = hint + " <kbd>Esc</kbd> or a click outside closes it.";
+    fit();
+    showPage(0);
+  }
+
+  // Shown at real size; scaled down only when the stage is narrower than the island.
+  function fit() {
+    const avail = screen.clientWidth - 16;
+    const need = state.width + 48;
+    zone.style.setProperty("--fit", Math.min(1, avail / need));
+  }
+  new ResizeObserver(fit).observe(screen);
+
+  $("prevBtn").addEventListener("click", e => { e.stopPropagation(); flip(-1); });
+  $("nextBtn").addEventListener("click", e => { e.stopPropagation(); flip(1); });
+  pill.addEventListener("wheel", e => {
+    e.preventDefault();
+    const strip = pageEl.querySelector(".icons");
+    if (state.wheel === "icons-first" && strip && strip.scrollWidth > strip.clientWidth + 1) {
+      const before = strip.scrollLeft;
+      strip.scrollLeft += e.deltaY;
+      if (strip.scrollLeft !== before) return;
+    }
+    flip(e.deltaY > 0 ? 1 : -1);
+  }, { passive: false });
+
+  // ---------- opening the shell ----------
+  const shell = $("shell"), dim = $("dim"), sideL = $("sideLeft"), sideR = $("sideRight");
+  let shellOpen = false, hoverTimer = 0, busy = false;
+  const onButton = t => t.closest(".arrow");
+  pill.addEventListener("dblclick", e => { if (state.openWith === "double" && !onButton(e.target)) openShell(); });
+  pill.addEventListener("click", e => { if (state.openWith === "single" && !onButton(e.target)) openShell(); });
+  zone.addEventListener("mouseenter", () => { if (state.openWith === "hover") hoverTimer = setTimeout(openShell, 650); });
+  zone.addEventListener("mouseleave", () => clearTimeout(hoverTimer));
+  dim.addEventListener("click", closeShell);
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && shellOpen) closeShell(); });
+
+  const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function rectIn(el) {
+    const a = el.getBoundingClientRect(), b = screen.getBoundingClientRect();
+    return { x: a.left - b.left, y: a.top - b.top, w: a.width, h: a.height };
+  }
+  function place(el, r, radius) {
+    Object.assign(el.style, { left: r.x + "px", top: r.y + "px", width: r.w + "px", height: r.h + "px", borderRadius: radius + "px" });
+  }
+  function openShell() {
+    if (shellOpen || busy) return;
+    clearTimeout(hoverTimer);
+    shellOpen = true; busy = true;
+    const from = rectIn(pill);
+    const W = screen.clientWidth, H = screen.clientHeight;
+    const cardW = Math.min(W * (state.sidePanels && W > 700 ? 0.5 : 0.86), 560);
+    const to = { x: (W - cardW) / 2, y: state.topGap, w: cardW, h: H - state.topGap - 16 };
+    const ms = reduced() ? 1 : state.animMs;
+    const overshoot = 1 + (state.bounce / 100) * 2.4;
+    shell.style.transition = "none";
+    place(shell, from, parseFloat(pill.style.borderRadius));
+    shell.classList.add("on");
+    shell.classList.remove("show-content");
+    pill.style.opacity = "0";
+    dim.classList.add("on");
+    dim.style.opacity = state.dim / 100;
+    void shell.offsetWidth;
+    shell.style.transition = `left ${ms}ms, top ${ms}ms, width ${ms}ms, height ${ms}ms, border-radius ${ms}ms`;
+    shell.style.transitionTimingFunction = `cubic-bezier(0.34, ${overshoot.toFixed(3)}, 0.64, 1)`;
+    place(shell, to, state.shellRadius);
+    setTimeout(() => shell.classList.add("show-content"), ms * 0.45);
+    // side panels for each monitor's windows
+    const sideW = (W - cardW) / 2 - 28;
+    const showSides = state.sidePanels && sideW > 90;
+    for (const [el, x] of [[sideL, (W - cardW) / 2 - 12 - sideW], [sideR, (W + cardW) / 2 + 12]]) {
+      el.classList.toggle("on", showSides);
+      el.classList.remove("show");
+      if (showSides) place(el, { x, y: to.y, w: sideW, h: Math.min(to.h, 170) }, Math.max(12, state.shellRadius - 4));
+    }
+    setTimeout(() => { if (showSides) { sideL.classList.add("show"); sideR.classList.add("show"); } busy = false; }, ms * 0.5);
+    tickClock();
+  }
+  function closeShell() {
+    if (!shellOpen || busy) return;
+    busy = true;
+    const ms = reduced() ? 1 : Math.round(state.animMs * 0.75);
+    shell.classList.remove("show-content");
+    sideL.classList.remove("show"); sideR.classList.remove("show");
+    dim.style.opacity = 0;
+    pill.style.opacity = "0";
+    const to = rectIn(pill);
+    setTimeout(() => {
+      shell.style.transition = `left ${ms}ms, top ${ms}ms, width ${ms}ms, height ${ms}ms, border-radius ${ms}ms`;
+      shell.style.transitionTimingFunction = "cubic-bezier(0.65, 0, 0.35, 1)";
+      place(shell, to, parseFloat(pill.style.borderRadius));
+    }, 80);
+    setTimeout(() => {
+      shell.classList.remove("on");
+      sideL.classList.remove("on"); sideR.classList.remove("on");
+      dim.classList.remove("on");
+      pill.style.opacity = "";
+      shellOpen = false; busy = false;
+    }, ms + 100);
+  }
+  function tickClock() {
+    const now = new Date();
+    $("shellClock").textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    $("shellDate").textContent = now.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+  }
+
+  // ---------- dynamic moments ----------
+  let momentTimer = 0;
+  function moment(pageId, grow) {
+    clearTimeout(momentTimer);
+    const back = enabled()[pageIndex]?.id;
+    const jumped = goTo(pageId);
+    if (!jumped) showPage(0);
+    if (grow) pill.classList.add("tall");
+    momentTimer = setTimeout(() => {
+      pill.classList.remove("tall");
+      if (jumped && back) goTo(back);
+    }, state.momentSeconds * 1000);
+  }
+  $("testNotify").addEventListener("click", () => {
+    live.count += 1;
+    live.notifyText = ["Chat · Sam", "new message in #general"];
+    const canJump = state.autoNotify && enabled().some(p => p.id === "notifications");
+    if (canJump || state.notifyGrow) moment(canJump ? "notifications" : enabled()[pageIndex].id, state.notifyGrow);
+    else showPage(0);
+  });
+  $("testSong").addEventListener("click", () => {
+    live.song = true;
+    if (state.autoMusic && enabled().some(p => p.id === "music")) moment("music", false);
+    else showPage(0);
+  });
+
+  // ---------- saving ----------
+  const statusEl = $("status");
+  const setStatus = (text, s) => { statusEl.textContent = text; statusEl.dataset.state = s; };
+  let db = null, saveTimer = 0, saving = false, pendingSave = false, loaded = false;
+
+  function payload() {
+    return {
+      version: 1,
+      settings: { ...state },
+      pages: pages.map(p => ({ id: p.id, on: p.on })),
+      notes,
+      updatedAt: new Date().toISOString()
+    };
+  }
+  function scheduleSave() {
+    if (!loaded) return;
+    clearTimeout(saveTimer);
+    if (!db) { setStatus("Not saved: open this page in Claude to save", "error"); return; }
+    setStatus("Saving…", "saving");
+    saveTimer = setTimeout(save, 700);
+  }
+  async function save() {
+    if (saving) { pendingSave = true; return; }
+    saving = true;
+    try {
+      await db.doc("island/config").set(payload());
+      setStatus("Saved " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), "saved");
+    } catch (e) {
+      setStatus(e && e.code === "invalid_argument" ? "You can view these settings but not change them" : "Couldn't save just now; your next change will try again", "error");
+    } finally {
+      saving = false;
+      if (pendingSave) { pendingSave = false; save(); }
+    }
+  }
+
+  function apply(doc) {
+    if (!doc) return;
+    if (doc.settings) for (const item of ITEMS) if (item.key in doc.settings) state[item.key] = doc.settings[item.key];
+    if (Array.isArray(doc.pages)) {
+      const known = doc.pages.filter(p => PAGE_INFO[p.id]);
+      const missing = DEFAULT_PAGES.filter(d => !known.some(p => p.id === d.id));
+      pages = [...known.map(p => ({ id: p.id, on: !!p.on })), ...missing.map(p => ({ ...p }))];
+      if (!pages.some(p => p.on)) pages[0].on = true;
+    }
+    if (typeof doc.notes === "string") notes = doc.notes;
+    $("notes").value = notes;
+    clampPage();
+  }
+
+  const notesEl = $("notes");
+  notesEl.addEventListener("input", () => { notes = notesEl.value; scheduleSave(); });
+
+  let resetArmed = false, resetTimer = 0;
+  $("resetBtn").addEventListener("click", e => {
+    const b = e.currentTarget;
+    if (!resetArmed) {
+      resetArmed = true; b.textContent = "Click again to reset"; b.classList.add("danger-armed");
+      resetTimer = setTimeout(() => { resetArmed = false; b.textContent = "Back to the current island"; b.classList.remove("danger-armed"); }, 3500);
+      return;
+    }
+    clearTimeout(resetTimer);
+    resetArmed = false; b.textContent = "Back to the current island"; b.classList.remove("danger-armed");
+    state = defaults();
+    pages = DEFAULT_PAGES.map(p => ({ ...p }));
+    pageIndex = 2;
+    changed(true);
+  });
+  $("copyBtn").addEventListener("click", async e => {
+    const b = e.currentTarget;
+    const text = JSON.stringify(payload(), null, 2);
+    try { await navigator.clipboard.writeText(text); b.textContent = "Copied"; }
+    catch { b.textContent = "Couldn't copy"; }
+    setTimeout(() => { b.textContent = "Copy settings"; }, 1800);
+  });
+
+  // ---------- start ----------
+  buildControls();
+  syncControls();
+  renderPreview();
+  setStatus("Loading your settings…", "idle");
+
+  (async () => {
+    try { db = window.claude ? await window.claude.use("db") : null; } catch { db = null; }
+    if (db) {
+      try {
+        const snap = await db.doc("island/config").get();
+        if (snap.exists) {
+          apply(snap.data());
+          syncControls();
+          renderPreview();
+          setStatus("Your saved settings", "saved");
+        } else {
+          setStatus("Showing the current island", "idle");
+        }
+      } catch {
+        setStatus("Couldn't load saved settings; changes will still save", "error");
+      }
+    } else {
+      setStatus("Preview only: saving isn't available here", "error");
+    }
+    loaded = true;
+  })();
+})();
+</script>
