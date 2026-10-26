@@ -90,8 +90,8 @@ public sealed class IslandStyle
     public bool ShowCalls { get; set; } = true;
     /// <summary>Switch to it when you join a call.</summary>
     public bool JumpToCall { get; set; } = true;
-    /// <summary>Don't shrink to the peek bar during a call, so you can see who's speaking.</summary>
-    public bool CallKeepsOpen { get; set; } = true;
+    /// <summary>Don't shrink to the peek bar during a call (otherwise the peek bar shows whoever's talking).</summary>
+    public bool CallKeepsOpen { get; set; }
 
     // Dynamic moments
     public bool JumpToMusic { get; set; }

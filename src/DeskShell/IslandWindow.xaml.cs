@@ -59,6 +59,11 @@ public partial class IslandWindow : Window
     double _contentScale = 1;
     /// <summary>When each person in the call last spoke, so recent talkers stay in view.</summary>
     readonly Dictionary<string, long> _lastSpoke = new();
+    /// <summary>Someone stays in the peek pill this long after they stop, so it doesn't flicker between words.</summary>
+    const long SpeakerHoldMs = 1200;
+    readonly Dictionary<string, PeerView> _speakerViews = new();
+    DispatcherTimer? _speakerHold;
+    string _peekShape = "";
     string? _pageBeforeCall;
     string? _pageBeforeMoment;
     string? _lastTrack;
@@ -79,7 +84,8 @@ public partial class IslandWindow : Window
     readonly TextBlock _notificationCount = Line(11, bold: true);
     readonly Border _countChip = new();
     readonly Grid _windowsPage = new();
-    readonly ScrollViewer _windowsScroll = IconStrip();
+    // Every open window fits: the row shrinks when there are many
+    readonly Viewbox _windowsFit = new() { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(22, 0, 22, 0) };
     readonly TextBlock _noWindows = Empty("No open windows");
     readonly Grid _programsPage = new();
     readonly ScrollViewer _programsScroll = IconStrip();
@@ -294,20 +300,85 @@ public partial class IslandWindow : Window
         if (peek && (!_style.Peek || _hovered || _menuOpen || _inMoment || (_inCall && _style.CallKeepsOpen))) return;
         if (peek == _peeking) return;
         _peeking = peek;
-        var width = peek ? PeekWidth : _style.Width;
-        var height = peek ? PeekHeight : _style.Height;
-        var duration = TimeSpan.FromMilliseconds(animate ? 260 : 0);
-        IEasingFunction ease = peek ? new CubicEase { EasingMode = EasingMode.EaseInOut } : new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.3 };
-        foreach (var b in new[] { Pill, Shadow })
-        {
-            b.BeginAnimation(WidthProperty, new DoubleAnimation(width, duration) { EasingFunction = ease });
-            b.BeginAnimation(HeightProperty, new DoubleAnimation(height, duration) { EasingFunction = ease });
-            b.CornerRadius = new CornerRadius(peek ? PeekHeight / 2 : _style.CornerRadius);
-        }
         var fade = new DoubleAnimation(peek ? 0 : 1, TimeSpan.FromMilliseconds(peek ? 90 : 180)) { BeginTime = peek ? TimeSpan.Zero : TimeSpan.FromMilliseconds(animate ? 120 : 0) };
         Contents.BeginAnimation(OpacityProperty, fade);
         Dots.BeginAnimation(OpacityProperty, fade);
         Contents.IsHitTestVisible = !peek;
+        UpdatePeekShape(animate);
+    }
+
+    /// <summary>
+    /// The pill's size: full; or while peeking, a thin bar, or (in a call, while people talk) a
+    /// small pill wrapped around the talkers' pictures, growing as more join in.
+    /// </summary>
+    void UpdatePeekShape(bool animate = true)
+    {
+        var speakers = _peeking && _inCall ? CurrentSpeakers() : new List<VoicePeer>();
+        double width, height, radius;
+        if (!_peeking)
+        {
+            (width, height, radius) = (_style.Width, _style.Height, _style.CornerRadius);
+        }
+        else if (speakers.Count > 0)
+        {
+            height = 26 * _contentScale + 10;
+            width = speakers.Count * 28 * _contentScale + 12;
+            radius = height / 2 * Math.Clamp(_style.Roundness, 0, 100) / 100;
+        }
+        else
+        {
+            (width, height, radius) = (PeekWidth, PeekHeight, PeekHeight / 2);
+        }
+
+        UpdateSpeakerStrip(speakers);
+        var shape = $"{width:0.#}x{height:0.#}";
+        if (shape == _peekShape) return;
+        var growing = _peekShape.Length == 0 || height >= Pill.ActualHeight;
+        _peekShape = shape;
+        var duration = TimeSpan.FromMilliseconds(animate ? 260 : 0);
+        IEasingFunction ease = growing ? new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.3 } : new CubicEase { EasingMode = EasingMode.EaseInOut };
+        foreach (var b in new[] { Pill, Shadow })
+        {
+            b.BeginAnimation(WidthProperty, new DoubleAnimation(width, duration) { EasingFunction = ease });
+            b.BeginAnimation(HeightProperty, new DoubleAnimation(height, duration) { EasingFunction = ease });
+            b.CornerRadius = new CornerRadius(radius);
+        }
+        Speakers.BeginAnimation(OpacityProperty, new DoubleAnimation(speakers.Count > 0 ? 1 : 0, TimeSpan.FromMilliseconds(speakers.Count > 0 ? 220 : 120))
+        {
+            BeginTime = TimeSpan.FromMilliseconds(speakers.Count > 0 && animate ? 90 : 0)
+        });
+    }
+
+    /// <summary>Who's talking, plus anyone who stopped less than a moment ago.</summary>
+    List<VoicePeer> CurrentSpeakers()
+    {
+        var call = DiscordVoice.Current;
+        if (call == null) return new();
+        var now = Environment.TickCount64;
+        return call.Peers.Where(p => p.Speaking || now - _lastSpoke.GetValueOrDefault(p.Id, long.MinValue / 2) < SpeakerHoldMs).ToList();
+    }
+
+    void UpdateSpeakerStrip(List<VoicePeer> speakers)
+    {
+        foreach (var gone in _speakerViews.Keys.Except(speakers.Select(p => p.Id)).ToList()) _speakerViews.Remove(gone);
+        Speakers.Children.Clear();
+        Speakers.LayoutTransform = new ScaleTransform(_contentScale, _contentScale);
+        foreach (var peer in speakers)
+        {
+            if (!_speakerViews.TryGetValue(peer.Id, out var view)) _speakerViews[peer.Id] = view = MakePeerView();
+            UpdatePeerView(view, peer);
+            Speakers.Children.Add(view.Root);
+        }
+        // Check again when someone's moment after talking runs out
+        if (speakers.Any(p => !p.Speaking))
+        {
+            _speakerHold ??= new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Normal, (_, _) => UpdatePeekShape(), Dispatcher);
+            _speakerHold.Start();
+        }
+        else
+        {
+            _speakerHold?.Stop();
+        }
     }
 
     // ---------- pages ----------
@@ -354,14 +425,14 @@ public partial class IslandWindow : Window
         _notificationsPage.ToolTip = "Open Windows' notification centre";
 
         // Open windows and pinned programs: rows of icons that scroll sideways if there are many
-        _windowsScroll.Content = new ItemsControl
+        _windowsFit.Child = new ItemsControl
         {
             ItemsSource = _windows,
             ItemTemplate = (DataTemplate)Resources["IslandTaskTemplate"],
             ItemsPanel = (ItemsPanelTemplate)FindResource("HorizontalPanel"),
             HorizontalAlignment = HorizontalAlignment.Center
         };
-        _windowsPage.Children.Add(_windowsScroll);
+        _windowsPage.Children.Add(_windowsFit);
         _windowsPage.Children.Add(_noWindows);
 
         _programsScroll.Content = new ItemsControl
@@ -657,14 +728,19 @@ public partial class IslandWindow : Window
     {
         var inCall = _style.ShowCalls && DiscordVoice.Current != null;
         UpdateCallPage();
-        if (inCall == _inCall) return;
+        if (inCall == _inCall)
+        {
+            if (_peeking) UpdatePeekShape();
+            return;
+        }
 
         var current = CurrentPage;
         _inCall = inCall;
         if (inCall)
         {
             RebuildPages(current);
-            SetPeek(false);
+            if (_style.CallKeepsOpen) SetPeek(false);
+            else UpdatePeekShape();
             if (_style.JumpToCall && Pill.Visibility == Visibility.Visible)
             {
                 _pageBeforeCall = current;
@@ -675,7 +751,8 @@ public partial class IslandWindow : Window
         {
             RebuildPages(current == "call" ? _pageBeforeCall : current);
             _pageBeforeCall = null;
-            if (_style.Peek && !_hovered) _peekTimer.Start();
+            if (_peeking) UpdatePeekShape();
+            else if (_style.Peek && !_hovered) _peekTimer.Start();
         }
     }
 
@@ -884,7 +961,7 @@ public partial class IslandWindow : Window
         e.Handled = true;
         if (_peeking) return;
         // A long row of icons scrolls sideways first (if chosen); otherwise the wheel flips pages.
-        var strip = CurrentPage switch { "windows" => _windowsScroll, "programs" => _programsScroll, _ => null };
+        var strip = CurrentPage == "programs" ? _programsScroll : null;
         if (_style.WheelScrollsIconsFirst && strip != null && strip.ScrollableWidth > 1)
         {
             var target = Math.Clamp(strip.HorizontalOffset - e.Delta / 2.0, 0, strip.ScrollableWidth);

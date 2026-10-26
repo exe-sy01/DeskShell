@@ -30,6 +30,8 @@ public static class DiscordVoice
     static int _nextClient;
     // Each connected Discord (stable, PTB, Canary) reports its own call; the latest one wins.
     static readonly Dictionary<int, (VoiceCall? Call, long At)> _clients = new();
+    // Discord re-sends the same call many times a second (any voice change in the server fires it); repeats are ignored.
+    static readonly Dictionary<int, string> _lastMessage = new();
 
     /// <summary>The call you're in, or null.</summary>
     public static VoiceCall? Current { get; private set; }
@@ -95,7 +97,11 @@ public static class DiscordVoice
             }
             finally
             {
-                lock (_clients) _clients.Remove(id);
+                lock (_clients)
+                {
+                    _clients.Remove(id);
+                    _lastMessage.Remove(id);
+                }
                 Publish();
             }
         }
@@ -206,6 +212,11 @@ public static class DiscordVoice
 
     static void OnMessage(int client, string text)
     {
+        lock (_clients)
+        {
+            if (_lastMessage.TryGetValue(client, out var last) && last == text) return;
+            _lastMessage[client] = text;
+        }
         VoiceCall? call;
         try
         {
