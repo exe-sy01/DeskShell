@@ -100,8 +100,12 @@ public partial class ShellWindow : Window
         // Twice: the first move may land on a monitor with a different scale and trigger a DPI resize.
         for (var i = 0; i < 2; i++)
             Native.SetWindowPos(hwnd, Native.HWND_TOPMOST, b.X, b.Y, b.Width, b.Height, Native.SWP_SHOWWINDOW);
-        // The shell hangs from the top of the screen, level with the island.
-        ShellPanel.Margin = new Thickness(0, IslandWindow.TopGap, 0, 0);
+        // The shell hangs from the top of the screen, level with the island, in the island's style.
+        var style = App.Settings.Island;
+        ShellPanel.Margin = new Thickness(0, style.TopGap, 0, 0);
+        Card.CornerRadius = new CornerRadius(style.ShellRadius);
+        _board.Left.CornerRadius = _board.Right.CornerRadius = new CornerRadius(Math.Max(6, style.ShellRadius - 4));
+        Backdrop.Background = new SolidColorBrush(Color.FromArgb((byte)Math.Round(Math.Clamp(style.Dim, 0, 100) * 2.55), 0, 0, 0));
         FitToScreen();
 
         Activate();
@@ -116,9 +120,12 @@ public partial class ShellWindow : Window
             // card's, then fade the shell's contents in on top.
             var from = FromScreen(_island.PillScreenRect);
             _island.SetExpanded(true);
-            Morph(from, IslandWindow.PillHeight / 2, CardRect(), Card.CornerRadius.TopLeft, TimeSpan.FromMilliseconds(380),
-                new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.22 }, null);
-            ShellPanel.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)) { BeginTime = TimeSpan.FromMilliseconds(170) });
+            var ms = Math.Max(100, style.ExpandMs);
+            IEasingFunction ease = style.Bounce > 0
+                ? new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = style.Bounce / 100 }
+                : new CubicEase { EasingMode = EasingMode.EaseOut };
+            Morph(from, _island.PillCornerRadius, CardRect(), Card.CornerRadius.TopLeft, TimeSpan.FromMilliseconds(ms), ease, null);
+            ShellPanel.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)) { BeginTime = TimeSpan.FromMilliseconds(ms * 0.45) });
         }
         else
         {
@@ -253,7 +260,12 @@ public partial class ShellWindow : Window
         var availableWidth = ActualWidth - 80;
 
         var sideWidth = Math.Min(sideMax, (availableWidth - Card.Width) / 2 - sideGap);
-        if (sideWidth >= sideMin)
+        LeftHost.Visibility = App.Settings.Island.SidePanels ? Visibility.Visible : Visibility.Collapsed;
+        if (!App.Settings.Island.SidePanels)
+        {
+            RightHost.Visibility = Visibility.Collapsed;
+        }
+        else if (sideWidth >= sideMin)
         {
             Grid.SetRow(LeftHost, 0);
             Grid.SetColumn(LeftHost, 0);
@@ -317,7 +329,7 @@ public partial class ShellWindow : Window
         var cardRect = CardRect();
         ShellPanel.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(90)));
         Backdrop.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(260)));
-        Morph(cardRect, Card.CornerRadius.TopLeft, FromScreen(island.PillScreenRect), IslandWindow.PillHeight / 2, TimeSpan.FromMilliseconds(280),
+        Morph(cardRect, Card.CornerRadius.TopLeft, FromScreen(island.PillScreenRect), island.PillCornerRadius, TimeSpan.FromMilliseconds(Math.Max(80, App.Settings.Island.ExpandMs * 0.75)),
             new CubicEase { EasingMode = EasingMode.EaseInOut }, () =>
             {
                 island.SetExpanded(false);

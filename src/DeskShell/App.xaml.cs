@@ -119,6 +119,7 @@ public partial class App : Application
         DockPins.Start(Shell, apps);
         Fullscreen = new FullscreenWatcher();
         _ = Media.StartAsync();
+        NotificationWatcher.Start();
         CreateBars();
         StartWatchingSystem();
 
@@ -155,6 +156,7 @@ public partial class App : Application
         GameMode.Changed += on =>
         {
             BadgeService.Instance.SetPaused(on);
+            NotificationWatcher.Paused = on;
             DockPins.SetPaused(on);
             _placer?.SetPaused(on);
             if (!on) return;
@@ -217,6 +219,7 @@ public partial class App : Application
     {
         var dockChanged = updated.ShowIsland != Settings.ShowIsland || updated.IslandOnAllMonitors != Settings.IslandOnAllMonitors ||
                           updated.IslandReserveSpace != Settings.IslandReserveSpace ||
+                          System.Text.Json.JsonSerializer.Serialize(updated.Island) != System.Text.Json.JsonSerializer.Serialize(Settings.Island) ||
                           updated.ShowDock != Settings.ShowDock || updated.DockOnAllMonitors != Settings.DockOnAllMonitors || Math.Abs(updated.DockHeight - Settings.DockHeight) > 0.5;
         if (!updated.ActiveWindowBorder) _border?.Reset();
         Settings = updated;
@@ -268,7 +271,7 @@ public partial class App : Application
 
         // Every screen gets its usable area set, so the hidden taskbar's strip goes to windows even where there's no bar.
         _workArea.Reserve(all.Select(screen => (screen,
-            Settings.IslandReserveSpace && islandScreens.Any(s => s.HMonitor == screen.HMonitor) ? IslandWindow.ReservedHeight : 0,
+            Settings.IslandReserveSpace && islandScreens.Any(s => s.HMonitor == screen.HMonitor) ? Settings.Island.ReservedHeight : 0,
             dockScreens.Any(s => s.HMonitor == screen.HMonitor) ? Settings.DockHeight : 0.0)));
     }
 
@@ -312,7 +315,7 @@ public partial class App : Application
     [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 
     /// <summary>Recreates the island and docks for the current monitors and re-reserves their screen space.</summary>
-    void RebuildBars(string why)
+    public void RebuildBars(string why)
     {
         if (_quitting) return;
         Log.Info($"Rebuilding island and docks ({why})");
@@ -398,6 +401,7 @@ public partial class App : Application
         try
         {
             _watcher?.Dispose();
+            NotificationWatcher.Stop();
             Fullscreen?.Dispose();
             UpdateService.Stop();
             _hotkeys?.Dispose();

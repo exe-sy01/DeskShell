@@ -46,6 +46,69 @@ public sealed class AppRule
     public bool AlwaysOnTop { get; set; }
 }
 
+/// <summary>How the island looks and behaves. Island Workshop (an artifact) designs these; see <see cref="IslandWorkshop"/>.</summary>
+public sealed class IslandStyle
+{
+    public double Width { get; set; } = 420;
+    public double Height { get; set; } = 40;
+    /// <summary>Corner rounding as a percentage of half the height (100 = a full pill).</summary>
+    public double Roundness { get; set; } = 100;
+    /// <summary>"black", "glass" (see-through dark) or "tint" (dark with a touch of the accent colour).</summary>
+    public string Surface { get; set; } = "black";
+    /// <summary>"none", "subtle" or "accent".</summary>
+    public string Edge { get; set; } = "subtle";
+    /// <summary>"none", "soft" or "strong".</summary>
+    public string Shadow { get; set; } = "soft";
+    /// <summary>Gap between the top of the screen and the island.</summary>
+    public double TopGap { get; set; } = 8;
+    public bool HideFullscreen { get; set; } = true;
+    /// <summary>A thin bar until the mouse comes near.</summary>
+    public bool Peek { get; set; }
+
+    /// <summary>The pages, in order: notifications, music, windows, programs, clock.</summary>
+    public List<string> Pages { get; set; } = ["notifications", "music", "windows", "programs"];
+    public bool StartOnLastPage { get; set; } = true;
+    /// <summary>The ‹ › arrows: "always", "hover" or "hidden".</summary>
+    public string Arrows { get; set; } = "always";
+    public bool PageDots { get; set; }
+    /// <summary>The wheel scrolls a long row of icons before flipping pages.</summary>
+    public bool WheelScrollsIconsFirst { get; set; } = true;
+
+    public bool MusicArt { get; set; } = true;
+    public bool MusicArtist { get; set; } = true;
+    public bool MusicControls { get; set; } = true;
+    public bool MusicBars { get; set; }
+    public bool NotificationText { get; set; } = true;
+    public bool NotificationCount { get; set; } = true;
+    /// <summary>Each island lists every monitor's windows (false: only its own monitor's).</summary>
+    public bool WindowsFromAllMonitors { get; set; } = true;
+    public bool ActiveWindowTitle { get; set; }
+    public double IconSize { get; set; } = 18;
+
+    // Dynamic moments
+    public bool JumpToMusic { get; set; }
+    public bool JumpToNotifications { get; set; }
+    public bool GrowForNotifications { get; set; }
+    public double MomentSeconds { get; set; } = 5;
+
+    // Opening the shell
+    /// <summary>"double" (double-click), "single" (click on empty space) or "hover" (rest the mouse on it).</summary>
+    public string OpenWith { get; set; } = "double";
+    /// <summary>How much the island grows under the mouse, in percent.</summary>
+    public double HoverGrow { get; set; } = 2.5;
+    public double ExpandMs { get; set; } = 380;
+    /// <summary>Overshoot of the expand animation, in percent.</summary>
+    public double Bounce { get; set; } = 22;
+    /// <summary>How much the screen behind the shell darkens, in percent.</summary>
+    public double Dim { get; set; } = 30;
+    public double ShellRadius { get; set; } = 28;
+    public bool SidePanels { get; set; } = true;
+
+    [JsonIgnore] public double CornerRadius => Height / 2 * Math.Clamp(Roundness, 0, 100) / 100;
+    /// <summary>The strip at the top of the screen kept free for the island.</summary>
+    [JsonIgnore] public double ReservedHeight => TopGap + Height + 6;
+}
+
 /// <summary>User settings, stored as editable JSON in %APPDATA%\DeskShell\settings.json.</summary>
 public sealed class Settings
 {
@@ -61,6 +124,7 @@ public sealed class Settings
     public bool IslandReserveSpace { get; set; } = true;
     /// <summary>The island page last shown: music, notifications, windows or programs.</summary>
     public string IslandPage { get; set; } = "windows";
+    public IslandStyle Island { get; set; } = new();
 
     // Dock
     /// <summary>The bottom dock (replaced by the island; off unless turned back on).</summary>

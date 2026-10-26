@@ -86,6 +86,12 @@
                           Content="An island on every monitor, each showing its own windows (off: main monitor only)" />
                 <CheckBox x:Name="IslandReserveSpace" Style="{StaticResource Switch}" Margin="0,4,0,8" IsEnabled="{Binding IsChecked, ElementName=ShowIsland}"
                           Content="Keep maximised windows below the island" />
+                <TextBlock Style="{StaticResource Note}" Margin="0,8,0,6"
+                           Text="Its size, look, pages and animations are designed in Island Workshop: press &quot;Copy settings&quot; there, then paste them here." />
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                    <Button Style="{StaticResource PillButton}" Tag="&#xE77F;" Content="Paste from Island Workshop" Click="PasteIsland_Click" />
+                    <TextBlock x:Name="IslandImportStatus" Style="{StaticResource Note}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                </StackPanel>
 
                 <TextBlock Style="{StaticResource Section}" Text="Dock" />
                 <CheckBox x:Name="ShowDock" Style="{StaticResource Switch}" Margin="0,4,0,10"

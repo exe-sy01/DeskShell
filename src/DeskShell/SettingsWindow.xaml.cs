@@ -223,6 +223,30 @@ public partial class SettingsWindow : Window
 
     void Close_Click(object sender, RoutedEventArgs e) => Close();
 
+    /// <summary>Applies the island design copied from Island Workshop straight away.</summary>
+    void PasteIsland_Click(object sender, RoutedEventArgs e)
+    {
+        string text;
+        try { text = Clipboard.GetText(); }
+        catch { text = ""; }
+        var live = App.Settings;
+        var problem = IslandWorkshop.Apply(text, live);
+        if (problem != null)
+        {
+            IslandImportStatus.Text = problem;
+            return;
+        }
+        live.Save();
+        App.Instance.RebuildBars("island design pasted");
+        // Keep the draft in step so Save doesn't undo it.
+        _draft.Island = live.Clone().Island;
+        _draft.IslandOnAllMonitors = live.IslandOnAllMonitors;
+        _draft.IslandReserveSpace = live.IslandReserveSpace;
+        IslandOnAllMonitors.IsChecked = live.IslandOnAllMonitors;
+        IslandReserveSpace.IsChecked = live.IslandReserveSpace;
+        IslandImportStatus.Text = "Applied";
+    }
+
     void ShowInstallState()
     {
         InstallNote.Text = Installer.IsInstalledCopy

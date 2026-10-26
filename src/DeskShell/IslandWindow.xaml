@@ -6,7 +6,7 @@
         Title="DeskShell Island"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True" ShowActivated="False"
-        Left="-20000" Top="-20000" Width="452" Height="70"
+        Left="-20000" Top="-20000" Width="468" Height="110"
         UseLayoutRounding="True" FontFamily="{StaticResource UiFont}" Foreground="{DynamicResource TextBrush}">
     <Window.Resources>
         <!-- Round, quiet buttons inside the pill (arrows, media controls) -->
@@ -36,7 +36,7 @@
             </Setter>
         </Style>
 
-        <!-- An open window: just its icon; a dot underneath marks the one in use -->
+        <!-- An open window: its icon, a dot underneath for the one in use (and, if chosen, that one's title) -->
         <DataTemplate x:Key="IslandTaskTemplate" DataType="{x:Type tasks:ApplicationWindow}">
             <Button Command="{x:Static local:TaskCommands.Activate}" CommandParameter="{Binding}"
                     ToolTip="{Binding Title}" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="1,0">
@@ -49,13 +49,17 @@
                 </Button.ContextMenu>
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
-                        <Grid Width="32" Height="32">
+                        <Grid Height="32">
                             <Border x:Name="Bg" CornerRadius="16" Background="Transparent" />
-                            <Grid Width="18" Height="18">
-                                <Image x:Name="Img" Source="{Binding Icon}" RenderOptions.BitmapScalingMode="HighQuality" />
-                                <Image Source="{Binding OverlayIcon}" Width="10" Height="10" HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                       Margin="0,0,-4,-3" RenderOptions.BitmapScalingMode="HighQuality" />
-                            </Grid>
+                            <StackPanel Orientation="Horizontal" Margin="7,0">
+                                <Grid Width="{Binding IconSize, RelativeSource={RelativeSource AncestorType=local:IslandWindow}}" Height="{Binding IconSize, RelativeSource={RelativeSource AncestorType=local:IslandWindow}}" VerticalAlignment="Center">
+                                    <Image x:Name="Img" Source="{Binding Icon}" RenderOptions.BitmapScalingMode="HighQuality" />
+                                    <Image Source="{Binding OverlayIcon}" Width="10" Height="10" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                           Margin="0,0,-4,-3" RenderOptions.BitmapScalingMode="HighQuality" />
+                                </Grid>
+                                <TextBlock x:Name="Name" Text="{Binding Title}" MaxWidth="130" Margin="7,0,2,0" FontSize="12" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextBrush}" Visibility="Collapsed" />
+                            </StackPanel>
                             <Ellipse x:Name="Dot" Width="4" Height="4" VerticalAlignment="Bottom" Margin="0,0,0,1"
                                      Fill="{DynamicResource AccentBrush}" Visibility="Collapsed" />
                         </Grid>
@@ -66,6 +70,13 @@
                             <DataTrigger Binding="{Binding State}" Value="Active">
                                 <Setter TargetName="Dot" Property="Visibility" Value="Visible" />
                             </DataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding State}" Value="Active" />
+                                    <Condition Binding="{Binding ShowActiveTitle, RelativeSource={RelativeSource AncestorType=local:IslandWindow}}" Value="True" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter TargetName="Name" Property="Visibility" Value="Visible" />
+                            </MultiDataTrigger>
                             <DataTrigger Binding="{Binding State}" Value="Flashing">
                                 <Setter TargetName="Bg" Property="Background" Value="{DynamicResource FlashBrush}" />
                             </DataTrigger>
@@ -93,7 +104,8 @@
                         <Grid Width="32" Height="32">
                             <Border x:Name="Bg" CornerRadius="16" Background="Transparent" />
                             <TextBlock x:Name="Fallback" Style="{StaticResource Icon}" Text="&#xE8A5;" FontSize="15" Visibility="Collapsed" />
-                            <Image x:Name="Img" Source="{Binding Icon}" Width="18" Height="18" RenderOptions.BitmapScalingMode="HighQuality" />
+                            <Image x:Name="Img" Source="{Binding Icon}" Width="{Binding IconSize, RelativeSource={RelativeSource AncestorType=local:IslandWindow}}" Height="{Binding IconSize, RelativeSource={RelativeSource AncestorType=local:IslandWindow}}"
+                                   RenderOptions.BitmapScalingMode="HighQuality" />
                             <Ellipse x:Name="Dot" Width="4" Height="4" VerticalAlignment="Bottom" Margin="0,0,0,1"
                                      Fill="{DynamicResource TextDimBrush}" Visibility="Collapsed" />
                         </Grid>
@@ -122,49 +134,68 @@
 
     <Grid>
         <!-- Shadow, separate from the pill so the pill's text stays crisp -->
-        <Border x:Name="Shadow" Width="420" Height="40" CornerRadius="20" VerticalAlignment="Top" HorizontalAlignment="Center"
-                Margin="0,8,0,0" Background="Black" IsHitTestVisible="False" RenderTransformOrigin="0.5,0">
+        <Border x:Name="Shadow" VerticalAlignment="Top" HorizontalAlignment="Center"
+                Background="Black" IsHitTestVisible="False" RenderTransformOrigin="0.5,0">
             <Border.RenderTransform>
                 <ScaleTransform x:Name="ShadowScale" />
             </Border.RenderTransform>
             <Border.Effect>
-                <DropShadowEffect BlurRadius="16" ShadowDepth="3" Direction="270" Opacity="0.5" Color="Black" />
+                <DropShadowEffect x:Name="ShadowEffect" BlurRadius="16" ShadowDepth="3" Direction="270" Opacity="0.5" Color="Black" />
             </Border.Effect>
         </Border>
 
-        <Border x:Name="Pill" Width="420" Height="40" CornerRadius="20" VerticalAlignment="Top" HorizontalAlignment="Center"
-                Margin="0,8,0,0" Background="{DynamicResource IslandBrush}" BorderBrush="{DynamicResource IslandEdgeBrush}" BorderThickness="1"
+        <Border x:Name="Pill" VerticalAlignment="Top" HorizontalAlignment="Center" ClipToBounds="True"
+                Background="{DynamicResource IslandBrush}" BorderBrush="{DynamicResource IslandEdgeBrush}" BorderThickness="1"
                 RenderTransformOrigin="0.5,0" AllowDrop="True"
-                PreviewMouseLeftButtonDown="Pill_PreviewMouseLeftButtonDown" MouseWheel="Pill_MouseWheel"
+                PreviewMouseLeftButtonDown="Pill_PreviewMouseLeftButtonDown" MouseLeftButtonUp="Pill_MouseLeftButtonUp" MouseWheel="Pill_MouseWheel"
                 MouseEnter="Pill_MouseEnter" MouseLeave="Pill_MouseLeave" DragOver="Pill_DragOver" Drop="Pill_Drop">
             <Border.RenderTransform>
                 <ScaleTransform x:Name="PillScale" />
             </Border.RenderTransform>
             <Border.ContextMenu>
-                <ContextMenu>
+                <ContextMenu Opened="PillMenu_Opened" Closed="PillMenu_Closed">
                     <MenuItem Header="Open the shell" Click="OpenShell_Click" />
                     <MenuItem Header="DeskShell settings" Click="Settings_Click" />
                 </ContextMenu>
             </Border.ContextMenu>
-            <Grid Margin="5,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <Button x:Name="PrevButton" Style="{StaticResource IslandButton}" Click="Prev_Click">
-                    <TextBlock Style="{StaticResource Icon}" Text="&#xE76B;" FontSize="10" />
-                </Button>
-                <Grid Grid.Column="1" ClipToBounds="True" Margin="4,0">
-                    <ContentControl x:Name="PageHost" Focusable="False" VerticalAlignment="Center">
-                        <ContentControl.RenderTransform>
-                            <TranslateTransform x:Name="PageShift" />
-                        </ContentControl.RenderTransform>
-                    </ContentControl>
+            <Grid>
+                <!-- Normal contents: ‹ page › -->
+                <Grid x:Name="Contents" Margin="5,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="PrevButton" Style="{StaticResource IslandButton}" Click="Prev_Click">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE76B;" FontSize="10" />
+                    </Button>
+                    <Grid Grid.Column="1" ClipToBounds="True" Margin="4,0">
+                        <ContentControl x:Name="PageHost" Focusable="False" VerticalAlignment="Center">
+                            <ContentControl.RenderTransform>
+                                <TranslateTransform x:Name="PageShift" />
+                            </ContentControl.RenderTransform>
+                        </ContentControl>
+                    </Grid>
+                    <Button x:Name="NextButton" Grid.Column="2" Style="{StaticResource IslandButton}" Click="Next_Click">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE76C;" FontSize="10" />
+                    </Button>
                 </Grid>
-                <Button x:Name="NextButton" Grid.Column="2" Style="{StaticResource IslandButton}" Click="Next_Click">
-                    <TextBlock Style="{StaticResource Icon}" Text="&#xE76C;" FontSize="10" />
-                </Button>
+
+                <!-- A moment: a new notification shown in full while the island is taller -->
+                <Grid x:Name="Moment" Margin="14,0" Visibility="Collapsed" Opacity="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Image x:Name="MomentIcon" Width="24" Height="24" VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="MomentTitle" FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextBrush}" />
+                        <TextBlock x:Name="MomentBody" FontSize="11.5" TextWrapping="Wrap" MaxHeight="32" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextDimBrush}" />
+                    </StackPanel>
+                </Grid>
+
+                <StackPanel x:Name="Dots" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,3"
+                            IsHitTestVisible="False" Visibility="Collapsed" />
             </Grid>
         </Border>
     </Grid>

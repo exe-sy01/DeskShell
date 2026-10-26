@@ -50,6 +50,9 @@ public static class Installer
             case "--uninstall":
                 Uninstall();
                 return true;
+            case "--apply-island" when args.Length > 1:
+                ApplyIsland(args[1]);
+                return true;
             default:
                 return false;
         }
@@ -110,6 +113,33 @@ public static class Installer
             Log.Error("Uninstall failed", ex);
             Message($"DeskShell couldn't be removed completely: {ex.Message}", MessageBoxImage.Error);
         }
+    }
+
+    /// <summary>
+    /// Applies an Island Workshop settings file (what its "Copy settings" gives) and restarts DeskShell
+    /// with it. A running copy is asked to quit first, so it can't save over the change.
+    /// </summary>
+    static void ApplyIsland(string path)
+    {
+        var wasRunning = Process.GetProcessesByName("DeskShell").Any(p => p.Id != Environment.ProcessId);
+        if (!QuitRunningCopies())
+        {
+            Log.Error("Island settings not applied: DeskShell didn't quit");
+            return;
+        }
+        var settings = Settings.Load();
+        var problem = IslandWorkshop.Apply(File.ReadAllText(path), settings);
+        if (problem != null)
+        {
+            Log.Error("Island settings not applied: " + problem);
+        }
+        else
+        {
+            settings.Save();
+            Log.Info("Applied island settings from " + path);
+        }
+        if (wasRunning)
+            Process.Start(new ProcessStartInfo(IsInstalled ? InstalledExe : Environment.ProcessPath!) { UseShellExecute = true });
     }
 
     /// <summary>Asks a running DeskShell to quit (cleanly, so it brings the taskbar back) and waits for it.</summary>

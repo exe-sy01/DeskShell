@@ -1,5 +1,6 @@
 using System.IO;
 using System.Xml.Linq;
+using System.Windows.Threading;
 using Microsoft.Data.Sqlite;
 
 namespace DeskShell.Services;
@@ -13,7 +14,7 @@ public sealed record ToastItem(string AppId, string Title, string Body, DateTime
 /// </summary>
 internal static class NotificationReader
 {
-    static readonly string Source = Path.Combine(
+    internal static readonly string Source = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Microsoft\Windows\Notifications");
     static readonly string Copy = Path.Combine(Path.GetTempPath(), "DeskShell", "wpn");
 
@@ -140,5 +141,69 @@ internal static class NotificationReader
         {
             return new List<string>();
         }
+    }
+}
+
+/// <summary>
+/// Raises <see cref="Arrived"/> on the UI thread when a new notification lands in Windows'
+/// notification store (watched as files, so nothing polls while nothing arrives).
+/// </summary>
+internal static class NotificationWatcher
+{
+    static FileSystemWatcher? _watcher;
+    static DispatcherTimer? _debounce;
+    static DateTime _newest = DateTime.MaxValue;
+
+    public static event Action<ToastItem>? Arrived;
+
+    /// <summary>While true (game mode), changes are ignored.</summary>
+    public static bool Paused { get; set; }
+
+    public static void Start()
+    {
+        if (_watcher != null || !Directory.Exists(NotificationReader.Source)) return;
+        _debounce = new DispatcherTimer(TimeSpan.FromMilliseconds(700), DispatcherPriority.Background, async (_, _) =>
+        {
+            _debounce!.Stop();
+            await CheckAsync();
+        }, Dispatcher.CurrentDispatcher);
+        _debounce.Stop();
+        _ = Dispatcher.CurrentDispatcher.InvokeAsync(CheckAsync); // learns the newest one, announces nothing
+        try
+        {
+            _watcher = new FileSystemWatcher(NotificationReader.Source, "wpndatabase.db*")
+            {
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size,
+                EnableRaisingEvents = true
+            };
+            _watcher.Changed += (_, _) => _debounce.Dispatcher.InvokeAsync(() =>
+            {
+                if (Paused) return;
+                _debounce.Stop();
+                _debounce.Start();
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Can't watch for new notifications", ex);
+        }
+    }
+
+    public static void Stop()
+    {
+        _watcher?.Dispose();
+        _watcher = null;
+        _debounce?.Stop();
+    }
+
+    static async Task CheckAsync()
+    {
+        // A few, since entries without text are skipped
+        var latest = (await NotificationReader.ReadAsync(5)).FirstOrDefault();
+        if (latest == null) return;
+        var first = _newest == DateTime.MaxValue;
+        if (!first && latest.Arrived <= _newest) return;
+        _newest = latest.Arrived;
+        if (!first) Arrived?.Invoke(latest);
     }
 }
