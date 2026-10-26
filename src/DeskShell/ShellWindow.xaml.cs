@@ -34,11 +34,11 @@ public partial class ShellWindow : Window
 
     public bool IsOpen { get; private set; }
 
-    public ShellWindow(ShellManager shell, AppIndex apps, ClipboardHistory clipboard)
+    public ShellWindow(ShellManager shell, AppIndex apps, ClipboardHistory clipboard, MediaService media)
     {
         InitializeComponent();
+        ThemeManager.AlwaysDark(Resources);
 
-        var media = new MediaService();
         var toggles = new SystemToggles();
         _context = new ShellContext
         {
@@ -50,7 +50,6 @@ public partial class ShellWindow : Window
             CloseShell = immediate => CloseShell(immediate),
             BeginAppMenu = BeginAppMenu
         };
-        _ = media.StartAsync();
         _ = toggles.StartAsync();
 
         _board = new WindowBoard(shell, apps);
@@ -73,12 +72,16 @@ public partial class ShellWindow : Window
 
     // ---------- open / close ----------
 
-    public void OpenShell()
+    /// <summary>The island the shell grew out of, if any; it shrinks back into it on close.</summary>
+    IslandWindow? _island;
+
+    public void OpenShell(IslandWindow? island = null)
     {
         if (IsOpen) return;
         IsOpen = true;
 
-        var screen = ZoneManager.ScreenAtCursor();
+        var screen = island?.Screen ?? ZoneManager.ScreenAtCursor();
+        _island = island is { IsShowingPill: true } ? island : null;
         UpdateClock();
         SearchBox.Text = "";
         foreach (var host in Hosts) SafeCall(host.Tile.OnOpened);
@@ -90,12 +93,15 @@ public partial class ShellWindow : Window
         UpdateButton.IsEnabled = true;
 
         Backdrop.Opacity = 0;
+        ShellPanel.Opacity = 0;
         Show();
         var hwnd = new WindowInteropHelper(this).Handle;
         var b = screen.Bounds;
         // Twice: the first move may land on a monitor with a different scale and trigger a DPI resize.
         for (var i = 0; i < 2; i++)
             Native.SetWindowPos(hwnd, Native.HWND_TOPMOST, b.X, b.Y, b.Width, b.Height, Native.SWP_SHOWWINDOW);
+        // The shell hangs from the top of the screen, level with the island.
+        ShellPanel.Margin = new Thickness(0, IslandWindow.TopGap, 0, 0);
         FitToScreen();
 
         Activate();
@@ -103,13 +109,80 @@ public partial class ShellWindow : Window
         SearchBox.Focus();
         Keyboard.Focus(SearchBox);
 
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        Backdrop.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
-        var grow = new DoubleAnimation(0.96, 1, TimeSpan.FromMilliseconds(220)) { EasingFunction = ease };
-        ContentScale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
-        ContentScale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        Backdrop.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)));
+        if (_island != null)
+        {
+            // The pill grows into the shell: hide it, animate a black shape from its place to the
+            // card's, then fade the shell's contents in on top.
+            var from = FromScreen(_island.PillScreenRect);
+            _island.SetExpanded(true);
+            Morph(from, IslandWindow.PillHeight / 2, CardRect(), Card.CornerRadius.TopLeft, TimeSpan.FromMilliseconds(380),
+                new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.22 }, null);
+            ShellPanel.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)) { BeginTime = TimeSpan.FromMilliseconds(170) });
+        }
+        else
+        {
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            ShellPanel.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)));
+            var grow = new DoubleAnimation(0.96, 1, TimeSpan.FromMilliseconds(220)) { EasingFunction = ease };
+            ContentScale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+            ContentScale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        }
         _clock.Start();
     }
+
+    // ---------- the island morph ----------
+
+    static readonly DependencyProperty MorphProgressProperty = DependencyProperty.Register(
+        nameof(MorphProgress), typeof(double), typeof(ShellWindow), new PropertyMetadata(0.0, (d, _) => ((ShellWindow)d).UpdateMorph()));
+
+    double MorphProgress
+    {
+        get => (double)GetValue(MorphProgressProperty);
+        set => SetValue(MorphProgressProperty, value);
+    }
+
+    Rect _morphFrom, _morphTo;
+    double _radiusFrom, _radiusTo;
+
+    /// <summary>Animates the black shape from one rectangle (and corner radius) to another.</summary>
+    void Morph(Rect from, double radiusFrom, Rect to, double radiusTo, TimeSpan duration, IEasingFunction ease, Action? done)
+    {
+        _morphFrom = from;
+        _morphTo = to;
+        _radiusFrom = radiusFrom;
+        _radiusTo = radiusTo;
+        MorphShape.Visibility = Visibility.Visible;
+        var anim = new DoubleAnimation(0, 1, duration) { EasingFunction = ease };
+        anim.Completed += (_, _) =>
+        {
+            MorphShape.Visibility = Visibility.Collapsed;
+            done?.Invoke();
+        };
+        BeginAnimation(MorphProgressProperty, anim);
+    }
+
+    void UpdateMorph()
+    {
+        var t = MorphProgress;
+        double Lerp(double a, double b) => a + (b - a) * t;
+        var w = Math.Max(0, Lerp(_morphFrom.Width, _morphTo.Width));
+        var h = Math.Max(0, Lerp(_morphFrom.Height, _morphTo.Height));
+        Canvas.SetLeft(MorphShape, Lerp(_morphFrom.X, _morphTo.X));
+        Canvas.SetTop(MorphShape, Lerp(_morphFrom.Y, _morphTo.Y));
+        MorphShape.Width = w;
+        MorphShape.Height = h;
+        MorphShape.CornerRadius = new CornerRadius(Math.Min(Math.Max(0, Lerp(_radiusFrom, _radiusTo)), Math.Min(w, h) / 2));
+    }
+
+    /// <summary>The card's rectangle in this window's coordinates (after any shrink-to-fit).</summary>
+    Rect CardRect()
+    {
+        UpdateLayout();
+        return Card.TransformToAncestor(this).TransformBounds(new Rect(Card.RenderSize));
+    }
+
+    Rect FromScreen(Rect screenRect) => new(PointFromScreen(screenRect.TopLeft), PointFromScreen(screenRect.BottomRight));
 
     // ---------- app menus over the shell ----------
 
@@ -175,8 +248,8 @@ public partial class ShellWindow : Window
     {
         const double sideGap = 16, sideMin = 300, sideMax = 380;
         ShellPanel.LayoutTransform = Transform.Identity;
-        // Keep clear of the dock at the bottom.
-        var availableHeight = ActualHeight - (App.Settings.ShowDock ? App.Settings.DockHeight : 0) - 40;
+        // Hangs from the top; keep clear of the dock at the bottom.
+        var availableHeight = ActualHeight - ShellPanel.Margin.Top - (App.Settings.ShowDock ? App.Settings.DockHeight : 0) - 24;
         var availableWidth = ActualWidth - 80;
 
         var sideWidth = Math.Min(sideMax, (availableWidth - Card.Width) / 2 - sideGap);
@@ -218,17 +291,39 @@ public partial class ShellWindow : Window
         _board.Close();
         App.Instance.TrimMemorySoon();
 
-        if (immediate)
+        var island = _island;
+        _island = null;
+        if (immediate || island == null || !island.IsVisible)
         {
-            Backdrop.BeginAnimation(OpacityProperty, null);
-            Backdrop.Opacity = 0;
-            Hide();
+            if (immediate)
+            {
+                BeginAnimation(MorphProgressProperty, null);
+                MorphShape.Visibility = Visibility.Collapsed;
+                Backdrop.BeginAnimation(OpacityProperty, null);
+                Backdrop.Opacity = 0;
+                Hide();
+                island?.SetExpanded(false);
+                return;
+            }
+            var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(110));
+            fade.Completed += (_, _) => { if (!IsOpen) Hide(); };
+            Backdrop.BeginAnimation(OpacityProperty, fade);
+            ShellPanel.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(110)));
+            island?.SetExpanded(false);
             return;
         }
 
-        var fade = new DoubleAnimation(0, TimeSpan.FromMilliseconds(110));
-        fade.Completed += (_, _) => { if (!IsOpen) Hide(); };
-        Backdrop.BeginAnimation(OpacityProperty, fade);
+        // Shrink back into the pill: the contents fade, the black shape returns to the island.
+        var cardRect = CardRect();
+        ShellPanel.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(90)));
+        Backdrop.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(260)));
+        Morph(cardRect, Card.CornerRadius.TopLeft, FromScreen(island.PillScreenRect), IslandWindow.PillHeight / 2, TimeSpan.FromMilliseconds(280),
+            new CubicEase { EasingMode = EasingMode.EaseInOut }, () =>
+            {
+                island.SetExpanded(false);
+                if (!IsOpen) Hide();
+            });
+        MorphShape.Visibility = Visibility.Visible;
     }
 
     public void ForceClose()

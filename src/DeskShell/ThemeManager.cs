@@ -39,6 +39,23 @@ public static class ThemeManager
     }
 
     static string _lastSignature = "";
+    static readonly List<ResourceDictionary> _alwaysDark = new();
+
+    /// <summary>
+    /// The island and the shell are always dark (black, like Apple's Dynamic Island), whatever
+    /// Windows' mode: their windows get the dark palette in their own resources.
+    /// </summary>
+    public static void AlwaysDark(ResourceDictionary resources)
+    {
+        _alwaysDark.Add(resources);
+        ApplyPalette(resources, Dark, DarkAccent());
+    }
+
+    static Color DarkAccent()
+    {
+        try { return ToWpf((_ui ?? new UISettings()).GetColorValue(UIColorType.AccentLight2)); }
+        catch { return Color.FromRgb(0x60, 0xCD, 0xFF); }
+    }
 
     static void ApplyAndNotify()
     {
@@ -62,7 +79,27 @@ public static class ThemeManager
             accent = Color.FromRgb(0x60, 0xCD, 0xFF);
         }
 
-        var p = IsDark ? Dark : Light;
+        ApplyPalette(Application.Current.Resources, IsDark ? Dark : Light, accent);
+        var darkAccent = IsDark ? accent : DarkAccent();
+        foreach (var resources in _alwaysDark) ApplyPalette(resources, Dark, darkAccent);
+
+        _lastSignature = $"{IsDark}|{accent}";
+    }
+
+    static void ApplyPalette(ResourceDictionary resources, Palette p, Color accent)
+    {
+        void Set(string key, Color color)
+        {
+            if (key == "AccentColor")
+            {
+                resources[key] = color;
+                return;
+            }
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            resources[key] = brush;
+        }
+
         Set("AccentColor", accent);
         Set("AccentBrush", accent);
         Set("OnAccentBrush", p.OnAccent);
@@ -83,21 +120,8 @@ public static class ThemeManager
         Set("ThumbOuterBrush", p.ThumbOuter);
         Set("FlashBrush", p.Flash);
         Set("DangerBrush", Color.FromRgb(0xC4, 0x2B, 0x1C));
-
-        _lastSignature = $"{IsDark}|{accent}";
-    }
-
-    static void Set(string key, Color color)
-    {
-        var resources = Application.Current.Resources;
-        if (key == "AccentColor")
-        {
-            resources[key] = color;
-            return;
-        }
-        var brush = new SolidColorBrush(color);
-        brush.Freeze();
-        resources[key] = brush;
+        Set("IslandBrush", Hex(0xFF000000));
+        Set("IslandEdgeBrush", Hex(0x1FFFFFFF));
     }
 
     static Color ToWpf(WinColor c) => Color.FromArgb(c.A, c.R, c.G, c.B);

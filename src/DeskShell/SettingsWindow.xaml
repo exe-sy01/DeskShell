@@ -79,9 +79,17 @@
                 <CheckBox x:Name="GameModeOn" Style="{StaticResource Switch}" Content="Game mode" Margin="0,4,0,8" />
                 <CheckBox x:Name="GameModeDnd" Style="{StaticResource Switch}" Content="Turn on Do Not Disturb during games (if it isn't on already)" Margin="0,4,0,4" />
 
+                <TextBlock Style="{StaticResource Section}" Text="Island" />
+                <TextBlock Style="{StaticResource Note}" Text="The pill at the top of the screen. ‹ › or the mouse wheel flip between notifications, music, open windows and pinned programs; double-click it to open the shell." />
+                <CheckBox x:Name="ShowIsland" Style="{StaticResource Switch}" Margin="0,4,0,8" Content="Show the island" />
+                <CheckBox x:Name="IslandOnAllMonitors" Style="{StaticResource Switch}" Margin="0,4,0,8" IsEnabled="{Binding IsChecked, ElementName=ShowIsland}"
+                          Content="An island on every monitor, each showing its own windows (off: main monitor only)" />
+                <CheckBox x:Name="IslandReserveSpace" Style="{StaticResource Switch}" Margin="0,4,0,8" IsEnabled="{Binding IsChecked, ElementName=ShowIsland}"
+                          Content="Keep maximised windows below the island" />
+
                 <TextBlock Style="{StaticResource Section}" Text="Dock" />
                 <CheckBox x:Name="ShowDock" Style="{StaticResource Switch}" Margin="0,4,0,10"
-                          Content="Show the dock (off: just the shell, opened with its hotkey)" />
+                          Content="Show the dock at the bottom of the screen (the island replaces it)" />
                 <CheckBox x:Name="DockOnAllMonitors" Style="{StaticResource Switch}" Margin="0,4,0,10" IsEnabled="{Binding IsChecked, ElementName=ShowDock}"
                           Content="A dock on every monitor, each showing its own windows" />
                 <Grid Style="{StaticResource Row}">

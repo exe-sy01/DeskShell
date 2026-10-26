@@ -9,8 +9,15 @@
         UseLayoutRounding="True" FontFamily="{StaticResource UiFont}" Foreground="{DynamicResource TextBrush}"
         PreviewKeyDown="Window_PreviewKeyDown">
 
-    <Grid x:Name="Backdrop" Background="{DynamicResource DimBrush}" Opacity="0" MouseLeftButtonDown="Backdrop_MouseLeftButtonDown">
-        <Grid x:Name="ShellPanel" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+    <Grid>
+    <Grid x:Name="Backdrop" Background="{DynamicResource DimBrush}" Opacity="0" MouseLeftButtonDown="Backdrop_MouseLeftButtonDown" />
+
+    <!-- The island growing into the shell (and shrinking back): a black shape animated between the two -->
+    <Canvas IsHitTestVisible="False">
+        <Border x:Name="MorphShape" Background="{DynamicResource IslandBrush}" BorderBrush="{DynamicResource IslandEdgeBrush}" BorderThickness="1" Visibility="Collapsed" />
+    </Canvas>
+
+        <Grid x:Name="ShellPanel" HorizontalAlignment="Center" VerticalAlignment="Top" RenderTransformOrigin="0.5,0">
             <Grid.RenderTransform>
                 <ScaleTransform x:Name="ContentScale" ScaleX="1" ScaleY="1" />
             </Grid.RenderTransform>
@@ -25,7 +32,7 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <Border x:Name="Card" Grid.Column="1" Width="1000" Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource EdgeBrush}" BorderThickness="1" CornerRadius="8" Padding="24,20,24,20">
+            <Border x:Name="Card" Grid.Column="1" Width="1000" Background="{DynamicResource IslandBrush}" BorderBrush="{DynamicResource IslandEdgeBrush}" BorderThickness="1" CornerRadius="28" Padding="28,22,28,22">
                 <StackPanel>
                     <!-- Time and search -->
                     <Grid Margin="0,0,0,18">
@@ -99,8 +106,8 @@
             </Border>
 
             <!-- Open windows (WindowBoard): Monitor 1 on the left of the shell, Monitor 2 on the right -->
-            <ContentControl x:Name="LeftHost" Grid.Column="0" Focusable="False" VerticalAlignment="Center" />
-            <ContentControl x:Name="RightHost" Grid.Column="2" Focusable="False" VerticalAlignment="Center" />
+            <ContentControl x:Name="LeftHost" Grid.Column="0" Focusable="False" VerticalAlignment="Top" />
+            <ContentControl x:Name="RightHost" Grid.Column="2" Focusable="False" VerticalAlignment="Top" />
 
             <TextBlock x:Name="HintText" Grid.Row="2" Grid.ColumnSpan="3" HorizontalAlignment="Center" Margin="0,12,0,0" Foreground="White" Opacity="0.75" FontSize="12" />
         </Grid>

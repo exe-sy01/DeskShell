@@ -21,6 +21,11 @@ public partial class App : Application
     internal OverviewWindow Overview { get; private set; } = null!;
 
     readonly List<DockWindow> _docks = new();
+    readonly List<IslandWindow> _islands = new();
+    AppIndex? _apps;
+
+    /// <summary>Now playing, shared by the island and the shell.</summary>
+    public MediaService Media { get; } = new();
     ShellWindow? _shellWindow;
     SettingsWindow? _settingsWindow;
     HotkeyManager? _hotkeys;
@@ -109,11 +114,12 @@ public partial class App : Application
         await WaitForWorkAreaToSettle();
         if (_quitting) return;
 
-        var apps = new AppIndex();
+        var apps = _apps = new AppIndex();
         apps.Start();
         DockPins.Start(Shell, apps);
         Fullscreen = new FullscreenWatcher();
-        CreateDocks();
+        _ = Media.StartAsync();
+        CreateBars();
         StartWatchingSystem();
 
         // Window management
@@ -139,7 +145,7 @@ public partial class App : Application
 
         // The shell panel
         _clipboard = new ClipboardHistory();
-        _shellWindow = new ShellWindow(Shell, apps, _clipboard);
+        _shellWindow = new ShellWindow(Shell, apps, _clipboard, Media);
 
         BadgeService.Instance.Start(Shell);
         _ = GameLibrary.RefreshAsync();
@@ -209,7 +215,9 @@ public partial class App : Application
     /// <summary>Called by the settings window after saving.</summary>
     public void ApplySettings(Settings updated)
     {
-        var dockChanged = updated.ShowDock != Settings.ShowDock || updated.DockOnAllMonitors != Settings.DockOnAllMonitors || Math.Abs(updated.DockHeight - Settings.DockHeight) > 0.5;
+        var dockChanged = updated.ShowIsland != Settings.ShowIsland || updated.IslandOnAllMonitors != Settings.IslandOnAllMonitors ||
+                          updated.IslandReserveSpace != Settings.IslandReserveSpace ||
+                          updated.ShowDock != Settings.ShowDock || updated.DockOnAllMonitors != Settings.DockOnAllMonitors || Math.Abs(updated.DockHeight - Settings.DockHeight) > 0.5;
         if (!updated.ActiveWindowBorder) _border?.Reset();
         Settings = updated;
         Settings.Save();
@@ -218,11 +226,7 @@ public partial class App : Application
         if (_altTab != null) _altTab.Enabled = Settings.CustomAltTab;
         StartupRegistration.Apply(Settings.StartWithWindows);
         _shellWindow?.UpdateHint();
-        if (dockChanged)
-        {
-            CloseDocks();
-            CreateDocks();
-        }
+        if (dockChanged) RebuildBars("settings changed");
     }
 
     public void ResetTiles() => _shellWindow?.ResetTiles();
@@ -239,31 +243,36 @@ public partial class App : Application
         _settingsWindow.Activate();
     }
 
-    void CreateDocks()
+    /// <summary>Creates the island(s) and dock(s) the settings ask for and reserves their screen space.</summary>
+    void CreateBars()
     {
         _workArea ??= new WorkAreaReserver();
-        if (!Settings.ShowDock)
+        var all = AppBarScreen.FromAllScreens();
+        var islandScreens = !Settings.ShowIsland ? new List<AppBarScreen>()
+            : Settings.IslandOnAllMonitors ? all : all.Where(s => s.Primary).Take(1).ToList();
+        var dockScreens = !Settings.ShowDock ? new List<AppBarScreen>()
+            : Settings.DockOnAllMonitors ? all : all.Where(s => s.Primary).Take(1).ToList();
+
+        foreach (var screen in islandScreens)
         {
-            // No dock: still keep the hidden taskbar's strip free for windows on every screen.
-            _workArea.Reserve(AppBarScreen.FromAllScreens(), 0);
-            return;
+            var island = new IslandWindow(Shell, screen, Media, _apps!);
+            island.Show();
+            _islands.Add(island);
         }
-
-        var screens = Settings.DockOnAllMonitors
-            ? AppBarScreen.FromAllScreens()
-            : new List<AppBarScreen> { AppBarScreen.FromPrimaryScreen() };
-
-        foreach (var screen in screens)
+        foreach (var screen in dockScreens)
         {
             var dock = new DockWindow(Shell, screen, Settings.DockHeight);
             dock.Show();
             _docks.Add(dock);
         }
 
-        _workArea.Reserve(screens, Settings.DockHeight);
+        // Every screen gets its usable area set, so the hidden taskbar's strip goes to windows even where there's no bar.
+        _workArea.Reserve(all.Select(screen => (screen,
+            Settings.IslandReserveSpace && islandScreens.Any(s => s.HMonitor == screen.HMonitor) ? IslandWindow.ReservedHeight : 0,
+            dockScreens.Any(s => s.HMonitor == screen.HMonitor) ? Settings.DockHeight : 0.0)));
     }
 
-    void CloseDocks()
+    void CloseBars()
     {
         foreach (var dock in _docks)
         {
@@ -271,6 +280,8 @@ public partial class App : Application
             dock.Close();
         }
         _docks.Clear();
+        foreach (var island in _islands) island.ForceClose();
+        _islands.Clear();
     }
 
     /// <summary>
@@ -300,26 +311,26 @@ public partial class App : Application
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern uint RegisterWindowMessage(string message);
     [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 
-    /// <summary>Recreates the docks for the current monitors and re-reserves their screen space.</summary>
-    void RebuildDocks(string why)
+    /// <summary>Recreates the island and docks for the current monitors and re-reserves their screen space.</summary>
+    void RebuildBars(string why)
     {
         if (_quitting) return;
-        Log.Info($"Rebuilding docks ({why})");
+        Log.Info($"Rebuilding island and docks ({why})");
         HideShell();
-        CloseDocks();
-        CreateDocks();
+        CloseBars();
+        CreateBars();
     }
 
     void StartWatchingSystem()
     {
         _watcher = new SystemWatcher();
-        _watcher.DisplaysChanged += () => RebuildDocks("displays changed");
-        _watcher.Resumed += () => RebuildDocks("woke from sleep");
+        _watcher.DisplaysChanged += () => RebuildBars("displays changed");
+        _watcher.Resumed += () => RebuildBars("woke from sleep");
         _watcher.ExplorerRestarted += () =>
         {
             // Explorer's new taskbar is hidden by TaskbarHider within a moment; Explorer also reset the
             // usable screen area and tray apps re-registered their icons with it.
-            RebuildDocks("Explorer restarted");
+            RebuildBars("Explorer restarted");
             var before = Shell.NotificationArea.TrayIcons.Count;
             AskTrayAppsToReAddIcons();
             BadgeService.Instance.AnnounceAllButtons(Shell); // and re-send their badges
@@ -333,12 +344,20 @@ public partial class App : Application
 
     public void ToggleShell()
     {
+        // From the hotkey: grow out of the island on the screen you're on, if there is one.
+        var screen = WindowManagement.ZoneManager.ScreenAtCursor();
+        OpenShellFrom(_islands.FirstOrDefault(i => i.Screen.HMonitor == screen.HMonitor));
+    }
+
+    /// <summary>Opens the shell out of <paramref name="island"/> (or plainly if null), or closes it if it's open.</summary>
+    public void OpenShellFrom(IslandWindow? island)
+    {
         if (_shellWindow == null) return;
         if (_shellWindow.IsOpen) _shellWindow.CloseShell();
         else
         {
             if (Overview.IsOpen) Overview.CloseOverview();
-            _shellWindow.OpenShell();
+            _shellWindow.OpenShell(island);
         }
     }
 
@@ -396,7 +415,7 @@ public partial class App : Application
             Overview?.Close();
             _settingsWindow?.Close();
             _shellWindow?.ForceClose();
-            CloseDocks();
+            CloseBars();
             Shell.AppBarManager.SignalGracefulShutdown();
             _hider?.Stop();
             // After Explorer's taskbar is back, so Explorer reclaims its space when it recalculates.

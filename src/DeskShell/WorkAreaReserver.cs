@@ -6,7 +6,8 @@ using ManagedShell.AppBar;
 namespace DeskShell;
 
 /// <summary>
-/// Keeps a strip at the bottom of each monitor free for the dock, so maximised windows stop above it.
+/// Keeps strips of each monitor free for the island (top) and dock (bottom), so maximised windows
+/// stay clear of them.
 ///
 /// Registering the dock as a Windows "app bar" (like the taskbar does) makes Explorer's own,
 /// hidden taskbar renegotiate its space over and over, which flickers for a while on startup.
@@ -20,7 +21,7 @@ internal sealed class WorkAreaReserver : IDisposable
 
     readonly HwndSource _listener;
     readonly DispatcherTimer _debounce;
-    List<(AppBarScreen Screen, int Reserve)> _targets = new();
+    List<(AppBarScreen Screen, int Top, int Bottom)> _targets = new();
     readonly Queue<long> _recentFixes = new();
     bool _active;
 
@@ -32,10 +33,14 @@ internal sealed class WorkAreaReserver : IDisposable
         _debounce.Stop();
     }
 
-    /// <summary>Reserves <paramref name="heightDip"/> at the bottom of each given monitor.</summary>
-    public void Reserve(IEnumerable<AppBarScreen> screens, double heightDip)
+    /// <summary>Reserves strips (in device-independent pixels) at the top and bottom of each given monitor.</summary>
+    public void Reserve(IEnumerable<(AppBarScreen Screen, double TopDip, double BottomDip)> screens)
     {
-        _targets = screens.Select(s => (s, (int)Math.Round(heightDip * WindowManagement.WmNative.ScaleFor(s.HMonitor)))).ToList();
+        _targets = screens.Select(s =>
+        {
+            var scale = WindowManagement.WmNative.ScaleFor(s.Screen.HMonitor);
+            return (s.Screen, (int)Math.Round(s.TopDip * scale), (int)Math.Round(s.BottomDip * scale));
+        }).ToList();
         _active = true;
         Apply();
     }
@@ -45,7 +50,7 @@ internal sealed class WorkAreaReserver : IDisposable
     {
         _active = false;
         _debounce.Stop();
-        foreach (var (screen, _) in _targets)
+        foreach (var (screen, _, _) in _targets)
         {
             var b = screen.Bounds;
             var full = new RECT { Left = b.Left, Top = b.Top, Right = b.Right, Bottom = b.Bottom };
@@ -60,18 +65,18 @@ internal sealed class WorkAreaReserver : IDisposable
 
     void Apply()
     {
-        foreach (var (screen, reserve) in _targets)
+        foreach (var (screen, top, bottom) in _targets)
         {
-            var desired = Desired(screen, reserve);
+            var desired = Desired(screen, top, bottom);
             if (!Matches(screen.HMonitor, desired)) Set(desired);
         }
     }
 
-    /// <summary>Full monitor minus our strip at the bottom (Explorer's hidden taskbar sits inside that strip).</summary>
-    static RECT Desired(AppBarScreen screen, int reserve)
+    /// <summary>Full monitor minus our strips (Explorer's hidden taskbar sits inside the bottom one).</summary>
+    static RECT Desired(AppBarScreen screen, int top, int bottom)
     {
         var b = screen.Bounds;
-        return new RECT { Left = b.Left, Top = b.Top, Right = b.Right, Bottom = b.Bottom - reserve };
+        return new RECT { Left = b.Left, Top = b.Top + top, Right = b.Right, Bottom = b.Bottom - bottom };
     }
 
     static bool Matches(IntPtr monitor, RECT desired)
@@ -99,7 +104,7 @@ internal sealed class WorkAreaReserver : IDisposable
     void Check()
     {
         _debounce.Stop();
-        if (!_active || _targets.All(t => Matches(t.Screen.HMonitor, Desired(t.Screen, t.Reserve)))) return;
+        if (!_active || _targets.All(t => Matches(t.Screen.HMonitor, Desired(t.Screen, t.Top, t.Bottom)))) return;
 
         // Something else changed the usable area; put our strip back, but never fight in a loop.
         var now = Environment.TickCount64;
@@ -110,7 +115,7 @@ internal sealed class WorkAreaReserver : IDisposable
             return;
         }
         _recentFixes.Enqueue(now);
-        Log.Info("Usable screen area was changed by something else; reserving the dock's strip again");
+        Log.Info("Usable screen area was changed by something else; reserving our strips again");
         Apply();
     }
 

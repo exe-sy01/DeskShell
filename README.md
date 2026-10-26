@@ -31,11 +31,18 @@ DeskShell doesn't include its own file manager; it's set up alongside [Files](ht
 
 ## What's in it
 
-**Dock** (bottom of every monitor): the shell button, pinned items, then that monitor's open windows with icons and names. Click a window to switch, click again to minimise, right-click to close. Hides while a fullscreen or borderless window (a game, a video) fills its monitor, even while you use another monitor. Settings → *Show the dock* turns it off entirely, leaving just the shell (`Alt+Space`) and giving windows the whole screen.
+**Island** (top of the main monitor): a black pill, like Apple's Dynamic Island, that never grows past its size. **‹ ›** or the mouse wheel flip between four pages:
 
-**Pinning to the dock:** right-click an open window → *Pin to dock*, right-click an app in shell search → *Pin to dock*, or drag files, folders or shortcuts onto the dock. A pinned app's windows show on its pin (click to open, switch, or step through its windows; right-click for its window list, *Open new window*, *Move left/right*, *Unpin*).
+- **Notifications**: the latest one and how many there are; click for Windows' notification centre
+- **Music**: what's playing, with previous / play-pause / next
+- **Open windows**: their icons; click to switch, click again to minimise, right-click to pin, minimise or close
+- **Programs**: your pinned apps, files and folders; drag files onto the island to pin them
 
-**Shell** (`Alt+Space`): type to search and launch any app. Tiles below, all movable and resizable with **Customise**:
+**Double-click the island** and it grows into the shell (and shrinks back into it when the shell closes). It hides while a fullscreen or borderless window (a game, a video) fills its monitor, and maximised windows sit below it. Settings → Island can put one on every monitor or stop reserving the space.
+
+The old **dock** at the bottom is still there if you want it (Settings → Dock); it's off by default now.
+
+**Shell** (double-click the island, or `Alt+Space`): type to search and launch any app. Tiles below, all movable and resizable with **Customise**:
 
 | Tile | Notes |
 |---|---|

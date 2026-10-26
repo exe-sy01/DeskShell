@@ -30,6 +30,8 @@
     <SolidColorBrush x:Key="ThumbOuterBrush" Color="#454545" />
     <SolidColorBrush x:Key="FlashBrush" Color="#66F7A325" />
     <SolidColorBrush x:Key="DangerBrush" Color="#C42B1C" />
+    <SolidColorBrush x:Key="IslandBrush" Color="#000000" />
+    <SolidColorBrush x:Key="IslandEdgeBrush" Color="#1FFFFFFF" />
 
     <FontFamily x:Key="UiFont">Segoe UI Variable Text, Segoe UI</FontFamily>
     <FontFamily x:Key="DisplayFont">Segoe UI Variable Display, Segoe UI</FontFamily>
@@ -304,7 +306,7 @@
                 ToolTip="{Binding Title}" Cursor="Hand" FocusVisualStyle="{x:Null}" Margin="2,0">
             <Button.ContextMenu>
                 <ContextMenu>
-                    <MenuItem Header="Pin to dock" Command="{x:Static local:TaskCommands.PinToDock}" CommandParameter="{Binding}" />
+                    <MenuItem Header="Pin" Command="{x:Static local:TaskCommands.PinToDock}" CommandParameter="{Binding}" />
                     <MenuItem Header="Minimise" Command="{x:Static local:TaskCommands.Minimize}" CommandParameter="{Binding}" />
                     <MenuItem Header="Close window" Command="{x:Static local:TaskCommands.Close}" CommandParameter="{Binding}" />
                 </ContextMenu>

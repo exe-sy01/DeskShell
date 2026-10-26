@@ -68,13 +68,13 @@ public sealed class WindowBoard
         };
         var panel = new Border
         {
-            CornerRadius = new CornerRadius(8),
+            CornerRadius = new CornerRadius(24),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(12, 10, 6, 6),
+            Padding = new Thickness(16, 14, 8, 8),
             Child = scroll
         };
-        panel.SetResourceReference(Border.BackgroundProperty, "CardBrush");
-        panel.SetResourceReference(Border.BorderBrushProperty, "EdgeBrush");
+        panel.SetResourceReference(Border.BackgroundProperty, "IslandBrush");
+        panel.SetResourceReference(Border.BorderBrushProperty, "IslandEdgeBrush");
         return (panel, scroll);
     }
 

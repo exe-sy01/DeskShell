@@ -54,9 +54,17 @@ public sealed class Settings
     public string OverviewHotkey { get; set; } = "Ctrl+Alt+Up";
     public string QuitHotkey { get; set; } = "Ctrl+Alt+Shift+Q";
 
+    // Island: the pill at the top of the screen
+    public bool ShowIsland { get; set; } = true;
+    public bool IslandOnAllMonitors { get; set; }
+    /// <summary>Keep a strip at the top free so maximised windows sit below the island.</summary>
+    public bool IslandReserveSpace { get; set; } = true;
+    /// <summary>The island page last shown: music, notifications, windows or programs.</summary>
+    public string IslandPage { get; set; } = "windows";
+
     // Dock
-    /// <summary>Off = no dock at all, just the shell (Alt+Space); windows get the whole screen.</summary>
-    public bool ShowDock { get; set; } = true;
+    /// <summary>The bottom dock (replaced by the island; off unless turned back on).</summary>
+    public bool ShowDock { get; set; }
     public bool DockOnAllMonitors { get; set; } = true;
     public double DockHeight { get; set; } = 64;
 
@@ -90,6 +98,9 @@ public sealed class Settings
     public bool CustomAltTab { get; set; } = true;
     public bool RestoreWindowPositions { get; set; } = true;
     public List<AppRule> AppRules { get; set; } = new();
+
+    /// <summary>One-time changes already applied to this settings file.</summary>
+    public List<string> Migrations { get; set; } = new();
 
     /// <summary>Tiles this settings file already knows about; tiles added in later versions get placed once.</summary>
     public List<string> KnownTiles { get; set; } = new();
@@ -141,6 +152,7 @@ public sealed class Settings
             {
                 var loaded = JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath), JsonOptions) ?? new Settings();
                 loaded.PlaceNewTiles();
+                loaded.Migrate();
                 loaded.Save(); // writes any settings added since the file was created
                 return loaded;
             }
@@ -152,8 +164,20 @@ public sealed class Settings
         }
 
         var fresh = new Settings();
+        fresh.Migrations.Add("island");
         fresh.Save();
         return fresh;
+    }
+
+    void Migrate()
+    {
+        // The island replaced the dock: switch the dock off once (it can be turned back on).
+        if (!Migrations.Contains("island"))
+        {
+            Migrations.Add("island");
+            ShowDock = false;
+            ShowIsland = true;
+        }
     }
 
     /// <summary>Adds tiles introduced since this layout was saved (once; removing them later sticks).</summary>
