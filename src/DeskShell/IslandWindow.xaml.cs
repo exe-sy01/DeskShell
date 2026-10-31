@@ -489,6 +489,8 @@ public partial class IslandWindow : Window
     {
         _page = (page % _pages.Count + _pages.Count) % _pages.Count;
         PageHost.Content = PageContent(CurrentPage);
+        // Not on the call page, which needs the room for avatars
+        AppsButton.Visibility = _style.AppsButton && CurrentPage != "call" ? Visibility.Visible : Visibility.Collapsed;
         PrevButton.ToolTip = PageNames[_pages[(_page + _pages.Count - 1) % _pages.Count]];
         NextButton.ToolTip = PageNames[_pages[(_page + 1) % _pages.Count]];
         UpdateDots();
@@ -1012,6 +1014,7 @@ public partial class IslandWindow : Window
     }
 
     void OpenShell_Click(object sender, RoutedEventArgs e) => App.Instance.OpenShellFrom(this);
+    void Apps_Click(object sender, RoutedEventArgs e) => App.Instance.ToggleAppDrawer();
     void Settings_Click(object sender, RoutedEventArgs e) => App.Instance.ShowSettings();
 
     // ---------- little builders ----------

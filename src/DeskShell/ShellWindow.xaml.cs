@@ -484,8 +484,13 @@ public partial class ShellWindow : Window
     void Launch(AppResult app)
     {
         CloseShell(immediate: true);
-        if (app.Target.StartsWith("game:") && GameLibrary.Find(app.Target[5..]) is { } game) GameLibrary.Launch(game);
-        else AppIndex.Launch(app.Target);
+        if (app.Target.StartsWith("game:") && GameLibrary.Find(app.Target[5..]) is { } game)
+        {
+            GameLibrary.Launch(game);
+            return;
+        }
+        App.Settings.RecordRecentApp(app.Target);
+        AppIndex.Launch(app.Target);
     }
 
     // ---------- tiles and customising ----------
@@ -545,6 +550,8 @@ public partial class ShellWindow : Window
     }
 
     void Customise_Click(object sender, RoutedEventArgs e) => SetEditing(!_editing);
+
+    void AllApps_Click(object sender, RoutedEventArgs e) => App.Instance.ToggleAppDrawer();
 
     async void Update_Click(object sender, RoutedEventArgs e)
     {

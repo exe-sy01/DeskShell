@@ -89,6 +89,8 @@
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                             <Button x:Name="UpdateButton" Style="{StaticResource AccentButton}" Tag="&#xE896;" Margin="0,0,8,0" Visibility="Collapsed"
                                     Click="Update_Click" ToolTip="Download and install the new version (DeskShell restarts)" />
+                            <Button Style="{StaticResource PillButton}" Tag="&#xE71D;" Content="All apps" Margin="0,0,8,0"
+                                    Click="AllApps_Click" ToolTip="Every app, A to Z" />
                             <Button x:Name="CustomiseButton" Style="{StaticResource PillButton}" Tag="&#xE70F;" Content="Customise" Margin="0,0,8,0"
                                     Click="Customise_Click" ToolTip="Move, resize, add and remove tiles" />
                             <Button Style="{StaticResource GhostButton}" Click="Overview_Click" ToolTip="Show all windows">

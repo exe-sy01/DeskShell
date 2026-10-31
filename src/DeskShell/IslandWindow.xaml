@@ -154,6 +154,7 @@
             </Border.RenderTransform>
             <Border.ContextMenu>
                 <ContextMenu Opened="PillMenu_Opened" Closed="PillMenu_Closed">
+                    <MenuItem Header="All apps" Click="Apps_Click" />
                     <MenuItem Header="Open the shell" Click="OpenShell_Click" />
                     <MenuItem Header="DeskShell settings" Click="Settings_Click" />
                 </ContextMenu>
@@ -166,9 +167,14 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <Button x:Name="PrevButton" Style="{StaticResource IslandButton}" Click="Prev_Click">
-                        <TextBlock Style="{StaticResource Icon}" Text="&#xE76B;" FontSize="10" />
-                    </Button>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="AppsButton" Style="{StaticResource IslandButton}" Click="Apps_Click" ToolTip="All apps" AutomationProperties.Name="All apps">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE71D;" FontSize="13" />
+                        </Button>
+                        <Button x:Name="PrevButton" Style="{StaticResource IslandButton}" Click="Prev_Click" AutomationProperties.Name="Previous page">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE76B;" FontSize="10" />
+                        </Button>
+                    </StackPanel>
                     <Grid Grid.Column="1" ClipToBounds="True" Margin="4,0">
                         <ContentControl x:Name="PageHost" Focusable="False" VerticalAlignment="Center">
                             <ContentControl.RenderTransform>
@@ -176,7 +182,7 @@
                             </ContentControl.RenderTransform>
                         </ContentControl>
                     </Grid>
-                    <Button x:Name="NextButton" Grid.Column="2" Style="{StaticResource IslandButton}" Click="Next_Click">
+                    <Button x:Name="NextButton" Grid.Column="2" Style="{StaticResource IslandButton}" Click="Next_Click" AutomationProperties.Name="Next page">
                         <TextBlock Style="{StaticResource Icon}" Text="&#xE76C;" FontSize="10" />
                     </Button>
                 </Grid>

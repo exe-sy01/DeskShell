@@ -86,10 +86,28 @@ public sealed class AppIndex
         return icon;
     }
 
-    public List<AppResult> Search(string query, int max = 8)
+    /// <summary>Every app by name, without loading icons.</summary>
+    public List<(string Name, string Target)> AllApps() =>
+        _entries.OrderBy(e => e.Name, StringComparer.CurrentCultureIgnoreCase).Select(e => (e.Name, e.Target)).ToList();
+
+    long _lastRead = Environment.TickCount64;
+
+    /// <summary>Picks up newly installed apps, at most every ten minutes.</summary>
+    public void RefreshIfOld()
+    {
+        if (Environment.TickCount64 - _lastRead < 600_000) return;
+        _lastRead = Environment.TickCount64;
+        Start();
+    }
+
+    public List<AppResult> Search(string query, int max = 8) =>
+        SearchNames(query, max).Select(a => new AppResult(a.Name, a.Target, IconFor(a.Target))).ToList();
+
+    /// <summary>Best matches first, without loading icons.</summary>
+    public List<(string Name, string Target)> SearchNames(string query, int max = 8)
     {
         query = query.Trim();
-        if (query.Length == 0) return new List<AppResult>();
+        if (query.Length == 0) return new();
 
         var scored = _entries
             .Select(e => (Entry: e, Score: Score(e.Name, query)))
@@ -102,7 +120,7 @@ public sealed class AppIndex
             .OrderByDescending(x => x.Score)
             .ThenBy(x => x.Entry.Name.Length)
             .Take(max)
-            .Select(x => new AppResult(x.Entry.Name, x.Entry.Target, IconFor(x.Entry.Target)))
+            .Select(x => (x.Entry.Name, x.Entry.Target))
             .ToList();
     }
 

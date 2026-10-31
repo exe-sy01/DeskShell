@@ -71,6 +71,8 @@ public sealed class IslandStyle
     /// <summary>The ‹ › arrows: "always", "hover" or "hidden".</summary>
     public string Arrows { get; set; } = "always";
     public bool PageDots { get; set; }
+    /// <summary>A button on the island that opens the app drawer.</summary>
+    public bool AppsButton { get; set; } = true;
     /// <summary>The wheel scrolls a long row of icons before flipping pages.</summary>
     public bool WheelScrollsIconsFirst { get; set; } = true;
 
@@ -124,6 +126,11 @@ public sealed class Settings
     public string ShellHotkey { get; set; } = "Alt+Space";
     public string OverviewHotkey { get; set; } = "Ctrl+Alt+Up";
     public string QuitHotkey { get; set; } = "Ctrl+Alt+Shift+Q";
+    public string AppDrawerHotkey { get; set; } = "Alt+Shift+Space";
+    /// <summary>A tap of the Windows key opens the app drawer instead of the Start menu (Win+ shortcuts still work).</summary>
+    public bool WinKeyOpensDrawer { get; set; } = true;
+    /// <summary>Apps opened from the drawer, most recent first.</summary>
+    public List<string> RecentApps { get; set; } = new();
 
     // Island: the pill at the top of the screen
     public bool ShowIsland { get; set; } = true;
@@ -263,6 +270,14 @@ public sealed class Settings
             var index = Tiles.FindIndex(t => t.Id == after);
             Tiles.Insert(index < 0 ? 0 : index + 1, new TileSetting(id, w, h));
         }
+    }
+
+    public void RecordRecentApp(string target)
+    {
+        RecentApps.RemoveAll(t => string.Equals(t, target, StringComparison.OrdinalIgnoreCase));
+        RecentApps.Insert(0, target);
+        if (RecentApps.Count > 6) RecentApps.RemoveRange(6, RecentApps.Count - 6);
+        Save();
     }
 
     public void Save()

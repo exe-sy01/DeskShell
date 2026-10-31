@@ -22,6 +22,8 @@ internal sealed class AltTabHook : IDisposable
     const uint LLKHF_INJECTED = 0x10;
     const int VK_TAB = 0x09, VK_ESCAPE = 0x1B, VK_LEFT = 0x25, VK_RIGHT = 0x27, VK_CONTROL = 0x11;
     const int VK_SHIFT = 0x10, VK_LSHIFT = 0xA0, VK_RSHIFT = 0xA1, VK_MENU = 0x12, VK_LMENU = 0xA4, VK_RMENU = 0xA5;
+    const int VK_LWIN = 0x5B, VK_RWIN = 0x5C;
+    const uint KEYEVENTF_EXTENDEDKEY = 1, KEYEVENTF_KEYUP = 2;
     const uint WM_QUIT = 0x12;
     const byte HelperKey = 0xE8; // unassigned virtual key
 
@@ -31,15 +33,20 @@ internal sealed class AltTabHook : IDisposable
     HookProc? _proc;
     IntPtr _hook;
     bool _alt, _shift, _active;
+    bool _winDown, _winAlone;
+    long _winLast;
 
     public volatile bool Enabled = true;
     public volatile bool Suspended;
+    /// <summary>A tap of the Windows key raises <see cref="WinTapped"/> instead of opening the Start menu.</summary>
+    public volatile bool CatchWinKey;
     long _heartbeat = Environment.TickCount64;
 
     public event Action<int>? Opened;
     public event Action<int>? Moved;
     public event Action? Committed;
     public event Action? Cancelled;
+    public event Action? WinTapped;
 
     public AltTabHook(Dispatcher ui)
     {
@@ -80,7 +87,9 @@ internal sealed class AltTabHook : IDisposable
             {
                 var kb = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
                 // Ignore only our own helper key; other injected input (key remappers, etc.) is handled normally.
-                var ownKey = (kb.flags & LLKHF_INJECTED) != 0 && kb.vkCode == HelperKey;
+                // Injected Windows-key events (our own release below, or a key remapper's) aren't a tap either.
+                var injected = (kb.flags & LLKHF_INJECTED) != 0;
+                var ownKey = injected && kb.vkCode is HelperKey or VK_LWIN or VK_RWIN;
                 if (!ownKey && Handle((int)wParam, (int)kb.vkCode))
                     return new IntPtr(1); // swallow
             }
@@ -96,6 +105,9 @@ internal sealed class AltTabHook : IDisposable
     {
         var down = msg is WM_KEYDOWN or WM_SYSKEYDOWN;
         var up = msg is WM_KEYUP or WM_SYSKEYUP;
+
+        if (vk is VK_LWIN or VK_RWIN) return HandleWinKey(vk, down, up);
+        if (down) _winAlone = false; // Win+something: a shortcut, not a tap
 
         if (vk is VK_MENU or VK_LMENU or VK_RMENU)
         {
@@ -159,6 +171,42 @@ internal sealed class AltTabHook : IDisposable
             }
         }
         return false;
+    }
+
+    /// <summary>
+    /// The Windows key always goes through when pressed, so Win+ shortcuts keep working. Only when
+    /// it's released with nothing pressed in between does Windows open the Start menu, so that
+    /// release is held back: a harmless fake key first makes it look like a shortcut, then the
+    /// release is sent on and the drawer opens instead. Left to Windows during games and if
+    /// DeskShell's UI isn't responding.
+    /// </summary>
+    bool HandleWinKey(int vk, bool down, bool up)
+    {
+        var now = Environment.TickCount64;
+        if (down)
+        {
+            // Held keys repeat; a long gap means the release was missed (e.g. Win+L locked the PC).
+            if (!_winDown || now - _winLast > 1000)
+            {
+                _winDown = true;
+                _winAlone = true;
+            }
+            _winLast = now;
+            return false;
+        }
+        if (!up) return false;
+
+        var tap = _winDown && _winAlone;
+        _winDown = _winAlone = false;
+        if (!tap || !CatchWinKey || Suspended) return false;
+        if (Environment.TickCount64 - Interlocked.Read(ref _heartbeat) >= 2000) return false;
+        if (new[] { VK_CONTROL, VK_SHIFT, VK_MENU }.Any(k => (GetAsyncKeyState(k) & 0x8000) != 0)) return false; // Ctrl+Win etc. stay with Windows
+
+        keybd_event(HelperKey, 0, 0, UIntPtr.Zero);
+        keybd_event(HelperKey, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        keybd_event((byte)vk, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, UIntPtr.Zero);
+        _ui.BeginInvoke(() => WinTapped?.Invoke());
+        return true;
     }
 
     public void Dispose()
@@ -291,6 +339,7 @@ internal sealed class AltTabController : IDisposable
             Activate(hwnd);
         };
 
+        _hook.WinTapped += () => WinKeyTapped?.Invoke();
         _heartbeat = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Normal, (_, _) => _hook.Beat(), Dispatcher.CurrentDispatcher);
         // Windows' own Alt+Tab while a game or video is in front.
         if (App.Fullscreen != null)
@@ -298,6 +347,11 @@ internal sealed class AltTabController : IDisposable
     }
 
     public bool Enabled { set => _hook.Enabled = value; }
+
+    /// <summary>Whether a tap of the Windows key raises <see cref="WinKeyTapped"/>.</summary>
+    public bool CatchWinKey { set => _hook.CatchWinKey = value; }
+
+    public event Action? WinKeyTapped;
 
     void Open(int direction)
     {

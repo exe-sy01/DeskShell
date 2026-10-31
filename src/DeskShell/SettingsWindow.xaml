@@ -46,10 +46,16 @@
                 <TextBlock Style="{StaticResource Section}" Text="General" Margin="0,16,0,4" />
                 <TextBlock Style="{StaticResource Note}" Text="Hotkeys are written like Alt+Space, Ctrl+Alt+Up or Win+Shift+S. A hotkey another app already uses won't work; DeskShell's log says which." />
                 <CheckBox x:Name="StartWithWindows" Style="{StaticResource Switch}" Content="Start DeskShell when I sign in to Windows" Margin="0,4,0,10" />
+                <CheckBox x:Name="WinKeyOpensDrawer" Style="{StaticResource Switch}" Content="Windows key opens the app drawer instead of the Start menu" Margin="0,0,0,10" />
                 <Grid Style="{StaticResource Row}">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="220" /><ColumnDefinition Width="220" /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource Label}" Text="Open the shell" />
                     <TextBox x:Name="ShellHotkey" Grid.Column="1" Style="{StaticResource Field}" />
+                </Grid>
+                <Grid Style="{StaticResource Row}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="220" /><ColumnDefinition Width="220" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Label}" Text="Open the app drawer" />
+                    <TextBox x:Name="AppDrawerHotkey" Grid.Column="1" Style="{StaticResource Field}" />
                 </Grid>
                 <Grid Style="{StaticResource Row}">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="220" /><ColumnDefinition Width="220" /></Grid.ColumnDefinitions>
@@ -86,6 +92,8 @@
                           Content="An island on every monitor, each showing its own windows (off: main monitor only)" />
                 <CheckBox x:Name="IslandReserveSpace" Style="{StaticResource Switch}" Margin="0,4,0,8" IsEnabled="{Binding IsChecked, ElementName=ShowIsland}"
                           Content="Keep maximised windows below the island" />
+                <CheckBox x:Name="IslandAppsButton" Style="{StaticResource Switch}" Margin="0,4,0,8" IsEnabled="{Binding IsChecked, ElementName=ShowIsland}"
+                          Content="All-apps button on the island" />
                 <TextBlock Style="{StaticResource Note}" Margin="0,8,0,6"
                            Text="Its size, look, pages and animations are designed in Island Workshop: press &quot;Copy settings&quot; there, then paste them here." />
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">

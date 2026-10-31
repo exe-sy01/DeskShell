@@ -23,6 +23,7 @@ public partial class App : Application
     readonly List<DockWindow> _docks = new();
     readonly List<IslandWindow> _islands = new();
     AppIndex? _apps;
+    AppDrawerWindow? _drawer;
 
     /// <summary>Now playing, shared by the island and the shell.</summary>
     public MediaService Media { get; } = new();
@@ -142,7 +143,9 @@ public partial class App : Application
             Zones.OnMoveSizeEnd(hwnd);
             Dispatcher.BeginInvoke(() => _placer.Remember(hwnd), DispatcherPriority.Background);
         };
-        _altTab = new AltTabController(Shell, mru);
+        _altTab = new AltTabController(Shell, mru) { CatchWinKey = Settings.WinKeyOpensDrawer };
+        _altTab.WinKeyTapped += ToggleAppDrawer;
+        _drawer = new AppDrawerWindow(apps);
         Overview = new OverviewWindow(Shell);
 
         // The shell panel
@@ -162,6 +165,7 @@ public partial class App : Application
             _placer?.SetPaused(on);
             if (!on) return;
             HideShell();
+            _drawer?.CloseDrawer();
             if (Overview.IsOpen) Overview.CloseOverview();
             TrimMemorySoon(TimeSpan.FromSeconds(2));
         };
@@ -212,6 +216,7 @@ public partial class App : Application
         if (!_hotkeys.Register(Settings.ShellHotkey, ToggleShell) && Settings.ShellHotkey != "Ctrl+Alt+Space")
             _hotkeys.Register("Ctrl+Alt+Space", ToggleShell);
         _hotkeys.Register(Settings.OverviewHotkey, () => Overview.Toggle());
+        _hotkeys.Register(Settings.AppDrawerHotkey, ToggleAppDrawer);
         _hotkeys.Register(Settings.QuitHotkey, Quit);
     }
 
@@ -227,7 +232,11 @@ public partial class App : Application
         Settings.Save();
 
         RegisterHotkeys();
-        if (_altTab != null) _altTab.Enabled = Settings.CustomAltTab;
+        if (_altTab != null)
+        {
+            _altTab.Enabled = Settings.CustomAltTab;
+            _altTab.CatchWinKey = Settings.WinKeyOpensDrawer;
+        }
         StartupRegistration.Apply(Settings.StartWithWindows);
         _shellWindow?.UpdateHint();
         if (dockChanged) RebuildBars("settings changed");
@@ -367,6 +376,20 @@ public partial class App : Application
 
     public void HideShell() => _shellWindow?.CloseShell(immediate: true);
 
+    /// <summary>Opens the app drawer on the screen you're on, or closes it.</summary>
+    public void ToggleAppDrawer()
+    {
+        if (_drawer == null) return;
+        if (_drawer.IsOpen)
+        {
+            _drawer.CloseDrawer();
+            return;
+        }
+        HideShell();
+        if (Overview.IsOpen) Overview.CloseOverview();
+        _drawer.Open(WindowManagement.ZoneManager.ScreenAtCursor());
+    }
+
     /// <summary>
     /// Hands memory DeskShell isn't using back to Windows a little after the shell closes,
     /// so Task Manager shows what it really needs while idle.
@@ -420,6 +443,7 @@ public partial class App : Application
             _clipboard?.Dispose();
             Overview?.Close();
             _settingsWindow?.Close();
+            _drawer?.ForceClose();
             _shellWindow?.ForceClose();
             CloseBars();
             Shell.AppBarManager.SignalGracefulShutdown();

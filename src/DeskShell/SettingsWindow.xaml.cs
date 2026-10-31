@@ -31,6 +31,9 @@ public partial class SettingsWindow : Window
         StartWithWindows.IsChecked = _draft.StartWithWindows;
         ShellHotkey.Text = _draft.ShellHotkey;
         OverviewHotkey.Text = _draft.OverviewHotkey;
+        AppDrawerHotkey.Text = _draft.AppDrawerHotkey;
+        WinKeyOpensDrawer.IsChecked = _draft.WinKeyOpensDrawer;
+        IslandAppsButton.IsChecked = _draft.Island.AppsButton;
         QuitHotkey.Text = _draft.QuitHotkey;
         GameModeOn.IsChecked = _draft.GameMode;
         GameModeDnd.IsChecked = _draft.GameModeDoNotDisturb;
@@ -175,6 +178,9 @@ public partial class SettingsWindow : Window
 
         _draft.ShellHotkey = Hotkey(ShellHotkey, "Shell");
         _draft.OverviewHotkey = Hotkey(OverviewHotkey, "Show-all-windows");
+        _draft.AppDrawerHotkey = Hotkey(AppDrawerHotkey, "App-drawer");
+        _draft.WinKeyOpensDrawer = WinKeyOpensDrawer.IsChecked == true;
+        _draft.Island.AppsButton = IslandAppsButton.IsChecked == true;
         _draft.QuitHotkey = Hotkey(QuitHotkey, "Quit");
         _draft.StartWithWindows = StartWithWindows.IsChecked == true;
         _draft.GameMode = GameModeOn.IsChecked == true;
@@ -217,6 +223,7 @@ public partial class SettingsWindow : Window
         _draft.Tiles = App.Settings.Tiles;
         _draft.PinnedApps = App.Settings.PinnedApps;
         _draft.DockPins = App.Settings.DockPins;
+        _draft.RecentApps = App.Settings.RecentApps;
         App.Instance.ApplySettings(_draft.Clone());
         Status.Text = "Saved";
     }
