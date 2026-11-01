@@ -193,7 +193,10 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Image x:Name="MomentIcon" Width="24" Height="24" VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <Grid.LayoutTransform>
+                        <ScaleTransform x:Name="MomentScale" />
+                    </Grid.LayoutTransform>
+                    <Image x:Name="MomentIcon" Width="24" Height="24" VerticalAlignment="Center" Margin="0,0,10,0" RenderOptions.BitmapScalingMode="HighQuality" />
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock x:Name="MomentTitle" FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextBrush}" />
                         <TextBlock x:Name="MomentBody" FontSize="11.5" TextWrapping="Wrap" MaxHeight="32" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextDimBrush}" />

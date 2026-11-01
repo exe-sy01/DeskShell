@@ -95,6 +95,9 @@ public sealed class IslandStyle
     /// <summary>Don't shrink to the peek bar during a call (otherwise the peek bar shows whoever's talking).</summary>
     public bool CallKeepsOpen { get; set; }
 
+    /// <summary>DMs and direct mentions from Discord (sent by the same plugin) count as notifications.</summary>
+    public bool DiscordMessages { get; set; } = true;
+
     // Dynamic moments
     public bool JumpToMusic { get; set; }
     public bool JumpToNotifications { get; set; }

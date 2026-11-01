@@ -55,6 +55,7 @@ public static class IslandWorkshop
         island.ShowCalls = Bool("calls", island.ShowCalls);
         island.JumpToCall = Bool("callJump", island.JumpToCall);
         island.CallKeepsOpen = Bool("callKeepsOpen", island.CallKeepsOpen);
+        island.DiscordMessages = Bool("discordMessages", island.DiscordMessages);
         island.JumpToMusic = Bool("autoMusic", island.JumpToMusic);
         island.JumpToNotifications = Bool("autoNotify", island.JumpToNotifications);
         island.GrowForNotifications = Bool("notifyGrow", island.GrowForNotifications);

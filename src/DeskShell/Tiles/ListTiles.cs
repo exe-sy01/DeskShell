@@ -184,8 +184,41 @@ public sealed class NotificationsTile : PanelTile
     public override async void OnOpened()
     {
         var items = await NotificationReader.ReadAsync();
+        var messages = App.Settings.Island.DiscordMessages ? DiscordLink.Messages.ToList() : new List<DiscordMessage>();
         _list.Children.Clear();
-        _empty.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        _empty.Visibility = items.Count + messages.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var m in messages)
+        {
+            var message = m;
+            var avatar = new Image { Source = DiscordLink.Avatar(message.Avatar), Width = 18, Height = 18, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 8, 0), Clip = new EllipseGeometry(new Point(9, 9), 9, 9) };
+            var title = Text(message.Title, 12.5, bold: true);
+            var when = Text(Ago(message.Arrived), 11, dim: true);
+            when.HorizontalAlignment = HorizontalAlignment.Right;
+            var top = new Grid();
+            top.ColumnDefinitions.Add(new ColumnDefinition());
+            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(when, 1);
+            top.Children.Add(title);
+            top.Children.Add(when);
+            var body = Text(message.Text, 12, dim: true);
+            body.TextWrapping = TextWrapping.Wrap;
+            body.MaxHeight = 34;
+            var text = new StackPanel();
+            text.Children.Add(Text("Discord", 11, dim: true));
+            text.Children.Add(top);
+            text.Children.Add(body);
+            var content = new DockPanel();
+            DockPanel.SetDock(avatar, Dock.Left);
+            content.Children.Add(avatar);
+            content.Children.Add(text);
+            var row = new Button { Style = Res<Style>("ListRow"), Content = content };
+            row.Click += (_, _) =>
+            {
+                CloseShell();
+                DiscordLink.Open(message);
+            };
+            _list.Children.Add(row);
+        }
         foreach (var n in items)
         {
             var app = Context.Apps.Find(n.AppId);

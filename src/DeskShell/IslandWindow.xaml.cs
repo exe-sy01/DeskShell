@@ -78,7 +78,12 @@ public partial class IslandWindow : Window
     readonly StackPanel _musicControls = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     readonly StackPanel _bars = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0), Height = 14 };
     readonly Grid _notificationsPage = new();
-    readonly Image _notificationIcon = new() { Width = 18, Height = 18 };
+    readonly Image _notificationIcon = new() { Width = 24, Height = 24 };
+    readonly TextBlock _notificationBell = Glyph("\uEA8F", 13);
+    /// <summary>What clicking the notifications page opens.</summary>
+    Action _notificationClick = ShellHelper.ShowNotificationCenter;
+    /// <summary>What clicking a moment opens.</summary>
+    Action? _momentClick;
     readonly TextBlock _notificationTitle = Line(12.5, bold: true);
     readonly TextBlock _notificationBody = Line(11, dim: true);
     readonly TextBlock _notificationCount = Line(11, bold: true);
@@ -99,7 +104,6 @@ public partial class IslandWindow : Window
     readonly StackPanel _callPeople = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
     readonly TextBlock _callMore = Line(11, dim: true);
     readonly Dictionary<string, PeerView> _peerViews = new();
-    static readonly Dictionary<string, ImageSource> AvatarCache = new();
 
     public AppBarScreen Screen { get; private set; }
 
@@ -137,7 +141,9 @@ public partial class IslandWindow : Window
 
         _media.Changed += OnMediaChanged;
         NotificationWatcher.Arrived += OnNotification;
-        DiscordVoice.Changed += OnCallChanged;
+        DiscordLink.CallChanged += OnCallChanged;
+        DiscordLink.MessageArrived += OnDiscordMessage;
+        DiscordLink.MessagesChanged += OnDiscordMessagesChanged;
         DockPins.Items.CollectionChanged += (_, _) => UpdateEmptyStates();
         if (_windows is System.Collections.Specialized.INotifyCollectionChanged changes)
             changes.CollectionChanged += (_, _) => UpdateEmptyStates();
@@ -150,7 +156,9 @@ public partial class IslandWindow : Window
         {
             _media.Changed -= OnMediaChanged;
             NotificationWatcher.Arrived -= OnNotification;
-            DiscordVoice.Changed -= OnCallChanged;
+            DiscordLink.CallChanged -= OnCallChanged;
+            DiscordLink.MessageArrived -= OnDiscordMessage;
+            DiscordLink.MessagesChanged -= OnDiscordMessagesChanged;
             _pageTimer.Stop();
             _momentTimer.Stop();
             if (App.Fullscreen != null) App.Fullscreen.Changed -= UpdateVisibility;
@@ -203,6 +211,7 @@ public partial class IslandWindow : Window
         // A taller island gets bigger text, icons and avatars (but not all the way, so things still fit).
         _contentScale = Math.Clamp(1 + (s.Height - 41) / 41 * 0.75, 0.8, 1.5);
         PageHost.LayoutTransform = new ScaleTransform(_contentScale, _contentScale);
+        MomentScale.ScaleX = MomentScale.ScaleY = _contentScale;
 
         IconSize = s.IconSize;
         ShowActiveTitle = s.ActiveWindowTitle;
@@ -212,7 +221,7 @@ public partial class IslandWindow : Window
         _notificationBody.Visibility = s.NotificationText && _notificationBody.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateBars();
 
-        _inCall = s.ShowCalls && DiscordVoice.Current != null;
+        _inCall = s.ShowCalls && DiscordLink.Call != null;
         UpdateCallPage();
         RebuildPages(s.StartOnLastPage ? App.Settings.IslandPage : null);
 
@@ -352,7 +361,7 @@ public partial class IslandWindow : Window
     /// <summary>Who's talking, plus anyone who stopped less than a moment ago.</summary>
     List<VoicePeer> CurrentSpeakers()
     {
-        var call = DiscordVoice.Current;
+        var call = DiscordLink.Call;
         if (call == null) return new();
         var now = Environment.TickCount64;
         return call.Peers.Where(p => p.Speaking || now - _lastSpoke.GetValueOrDefault(p.Id, long.MinValue / 2) < SpeakerHoldMs).ToList();
@@ -407,7 +416,7 @@ public partial class IslandWindow : Window
 
         // Notifications: icon · app and title / text · count
         var bell = new Grid { Width = 26, Height = 26 };
-        bell.Children.Add(Glyph("", 13));
+        bell.Children.Add(_notificationBell);
         bell.Children.Add(_notificationIcon);
         var noteTexts = Stack(_notificationTitle, _notificationBody);
         noteTexts.Margin = new Thickness(9, 0, 6, 0);
@@ -422,7 +431,6 @@ public partial class IslandWindow : Window
         Columns(_notificationsPage, bell, noteTexts, _countChip);
         _notificationsPage.Background = Brushes.Transparent;
         _notificationsPage.Cursor = Cursors.Hand;
-        _notificationsPage.ToolTip = "Open Windows' notification centre";
 
         // Open windows and pinned programs: rows of icons that scroll sideways if there are many
         _windowsFit.Child = new ItemsControl
@@ -628,33 +636,73 @@ public partial class IslandWindow : Window
             return;
         }
         var latest = items.FirstOrDefault();
-        _notificationCount.Text = items.Count.ToString();
-        _countChip.Visibility = _style.NotificationCount && items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        if (latest == null)
+        var messages = _style.DiscordMessages ? DiscordLink.Messages : [];
+        var message = messages.FirstOrDefault();
+        var total = items.Count + messages.Count;
+        _notificationCount.Text = total.ToString();
+        _countChip.Visibility = _style.NotificationCount && total > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        // Whichever is newer: a Discord message or a Windows notification
+        if (message != null && (latest == null || message.Arrived >= latest.Arrived))
         {
-            _notificationIcon.Source = null;
-            _notificationTitle.Text = "No notifications";
-            _notificationBody.Text = "";
-            _notificationBody.Visibility = Visibility.Collapsed;
-            return;
+            ShowNotification(DiscordLink.Avatar(message.Avatar), true, message.Title, message.Text);
+            _notificationClick = () => DiscordLink.Open(message);
         }
-        var app = _apps.Find(latest.AppId);
-        _notificationIcon.Source = app?.Icon;
-        _notificationTitle.Text = app != null ? $"{app.Name} · {latest.Title}" : latest.Title;
-        _notificationBody.Text = latest.Body;
-        _notificationBody.Visibility = _style.NotificationText && latest.Body.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        else if (latest != null)
+        {
+            var app = _apps.Find(latest.AppId);
+            ShowNotification(app?.Icon, false, app != null ? $"{app.Name} · {latest.Title}" : latest.Title, latest.Body);
+            _notificationClick = ShellHelper.ShowNotificationCenter;
+        }
+        else
+        {
+            ShowNotification(null, false, "No notifications", "");
+            _notificationClick = ShellHelper.ShowNotificationCenter;
+        }
+    }
+
+    void ShowNotification(ImageSource? icon, bool round, string title, string body)
+    {
+        _notificationIcon.Source = icon;
+        _notificationIcon.Clip = round ? new EllipseGeometry(new Point(12, 12), 12, 12) : null;
+        _notificationBell.Visibility = icon == null ? Visibility.Visible : Visibility.Collapsed;
+        _notificationTitle.Text = title;
+        _notificationBody.Text = body;
+        _notificationBody.Visibility = _style.NotificationText && body.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    void OnDiscordMessagesChanged()
+    {
+        if (_pages.Count > 0 && CurrentPage == "notifications") _ = RefreshNotificationsAsync();
+    }
+
+    /// <summary>Follows Do Not Disturb, in Windows or on Discord: the message is listed but doesn't pop up.</summary>
+    void OnDiscordMessage(DiscordMessage message)
+    {
+        if (!_style.DiscordMessages || message.Quiet || !IsVisible || GameMode.Active || DoNotDisturb.IsOn) return;
+        if (!(_style.GrowForNotifications || _style.JumpToNotifications)) return;
+        var view = _style.GrowForNotifications
+            ? new MomentView(DiscordLink.Avatar(message.Avatar), true, message.Title, _style.NotificationText ? message.Text : "", () => DiscordLink.Open(message))
+            : null;
+        StartMoment(_style.JumpToNotifications ? "notifications" : null, view);
     }
 
     void OnNotification(ToastItem item)
     {
         if (!IsVisible || GameMode.Active || !(_style.GrowForNotifications || _style.JumpToNotifications)) return;
-        StartMoment(_style.JumpToNotifications ? "notifications" : null, _style.GrowForNotifications ? item : null);
+        var app = _apps.Find(item.AppId);
+        var view = _style.GrowForNotifications
+            ? new MomentView(app?.Icon, false, app != null ? $"{app.Name} · {item.Title}" : item.Title, _style.NotificationText ? item.Body : "", ShellHelper.ShowNotificationCenter)
+            : null;
+        StartMoment(_style.JumpToNotifications ? "notifications" : null, view);
     }
 
     // ---------- moments: react, then settle back ----------
 
-    /// <summary>Shows <paramref name="page"/> (if it's one of the pages) and/or grows to show <paramref name="toast"/>, for a few seconds.</summary>
-    void StartMoment(string? page, ToastItem? toast)
+    sealed record MomentView(ImageSource? Icon, bool RoundIcon, string Title, string Body, Action Click);
+
+    /// <summary>Shows <paramref name="page"/> (if it's one of the pages) and/or grows to show <paramref name="view"/>, for a few seconds.</summary>
+    void StartMoment(string? page, MomentView? view)
     {
         if (Pill.Visibility != Visibility.Visible) return; // the shell is open
         if (!_inMoment) _pageBeforeMoment = CurrentPage;
@@ -662,13 +710,16 @@ public partial class IslandWindow : Window
         SetPeek(false);
         if (page != null) ShowPage(page);
 
-        if (toast != null)
+        if (view != null)
         {
-            var app = _apps.Find(toast.AppId);
-            MomentIcon.Source = app?.Icon;
-            MomentTitle.Text = app != null ? $"{app.Name} · {toast.Title}" : toast.Title;
-            MomentBody.Text = toast.Body;
-            MomentBody.Visibility = toast.Body.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            _momentClick = view.Click;
+            MomentIcon.Source = view.Icon;
+            MomentIcon.Visibility = view.Icon != null ? Visibility.Visible : Visibility.Collapsed;
+            Dots.Visibility = Visibility.Collapsed;
+            MomentIcon.Clip = view.RoundIcon ? new EllipseGeometry(new Point(12, 12), 12, 12) : null;
+            MomentTitle.Text = view.Title;
+            MomentBody.Text = view.Body;
+            MomentBody.Visibility = view.Body.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             Moment.Visibility = Visibility.Visible;
             var ease = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.3 };
             foreach (var b in new[] { Pill, Shadow })
@@ -707,6 +758,7 @@ public partial class IslandWindow : Window
             }
             Contents.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(180)) { BeginTime = TimeSpan.FromMilliseconds(140) });
             Contents.IsHitTestVisible = true;
+            UpdateDots();
         }
         if (restorePage && _pageBeforeMoment != null) ShowPage(_pageBeforeMoment);
         _pageBeforeMoment = null;
@@ -728,7 +780,7 @@ public partial class IslandWindow : Window
 
     void OnCallChanged()
     {
-        var inCall = _style.ShowCalls && DiscordVoice.Current != null;
+        var inCall = _style.ShowCalls && DiscordLink.Call != null;
         UpdateCallPage();
         if (inCall == _inCall)
         {
@@ -761,7 +813,7 @@ public partial class IslandWindow : Window
     /// <summary>Shows the call's channel and people; as many avatars as fit, then "+N".</summary>
     void UpdateCallPage()
     {
-        var call = DiscordVoice.Current;
+        var call = DiscordLink.Call;
         if (call == null) return;
         _callChannel.Text = call.Channel;
         _callServer.Text = FirstWord(call.Server);
@@ -833,7 +885,7 @@ public partial class IslandWindow : Window
         if (view.Avatar != peer.Avatar)
         {
             view.Avatar = peer.Avatar;
-            var image = peer.Avatar != null ? Avatar(peer.Avatar) : null;
+            var image = DiscordLink.Avatar(peer.Avatar);
             view.Photo.Fill = image != null ? new ImageBrush(image) { Stretch = Stretch.UniformToFill } : new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF));
         }
         view.Initial.Text = view.Avatar == null && peer.Name.Length > 0 ? peer.Name[..1].ToUpperInvariant() : "";
@@ -844,28 +896,6 @@ public partial class IslandWindow : Window
         view.Speaking = peer.Speaking;
         // The glow: a ring in the accent colour fades in while they talk
         view.Ring.BeginAnimation(OpacityProperty, new DoubleAnimation(peer.Speaking ? 1 : 0, TimeSpan.FromMilliseconds(peer.Speaking ? 90 : 250)));
-    }
-
-    /// <summary>Discord avatars, downloaded once and kept for the session.</summary>
-    static ImageSource? Avatar(string url)
-    {
-        if (AvatarCache.TryGetValue(url, out var cached)) return cached;
-        try
-        {
-            var image = new System.Windows.Media.Imaging.BitmapImage();
-            image.BeginInit();
-            image.UriSource = new Uri(url);
-            image.DecodePixelWidth = 64;
-            image.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-            image.EndInit();
-            AvatarCache[url] = image;
-            return image;
-        }
-        catch (Exception ex)
-        {
-            Log.Error("Couldn't load a Discord avatar", ex);
-            return null;
-        }
     }
 
     // ---------- pinned programs ----------
@@ -920,8 +950,9 @@ public partial class IslandWindow : Window
         if (IsOnButton(e.OriginalSource as DependencyObject)) return;
         if (_inMoment && Moment.Visibility == Visibility.Visible)
         {
+            var open = _momentClick;
             EndMoment(restorePage: false);
-            ShellHelper.ShowNotificationCenter();
+            open?.Invoke();
             return;
         }
         var onNotifications = CurrentPage == "notifications" && IsInside(e.OriginalSource as DependencyObject, _notificationsPage);
@@ -937,7 +968,7 @@ public partial class IslandWindow : Window
         _singleClick = new DispatcherTimer(TimeSpan.FromMilliseconds(delay), DispatcherPriority.Normal, (t, _) =>
         {
             ((DispatcherTimer)t!).Stop();
-            ShellHelper.ShowNotificationCenter();
+            _notificationClick();
         }, Dispatcher);
     }
 

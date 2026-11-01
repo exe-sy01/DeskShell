@@ -94,6 +94,8 @@
                           Content="Keep maximised windows below the island" />
                 <CheckBox x:Name="IslandAppsButton" Style="{StaticResource Switch}" Margin="0,4,0,8" IsEnabled="{Binding IsChecked, ElementName=ShowIsland}"
                           Content="All-apps button on the island" />
+                <CheckBox x:Name="IslandDiscordMessages" Style="{StaticResource Switch}" Margin="0,4,0,8" IsEnabled="{Binding IsChecked, ElementName=ShowIsland}"
+                          Content="Show Discord DMs and mentions as notifications" />
                 <TextBlock Style="{StaticResource Note}" Margin="0,8,0,6"
                            Text="Its size, look, pages and animations are designed in Island Workshop: press &quot;Copy settings&quot; there, then paste them here." />
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">

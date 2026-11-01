@@ -33,7 +33,7 @@ DeskShell doesn't include its own file manager; it's set up alongside [Files](ht
 
 **Island** (top of the main monitor): a black pill, like Apple's Dynamic Island, that never grows past its size. **‹ ›** or the mouse wheel flip between four pages:
 
-- **Notifications**: the latest one and how many there are; click for Windows' notification centre
+- **Notifications**: the latest one and how many there are, including unread Discord DMs and direct mentions (from the AIChat Vencord plugin). Click a Discord message to open it in Discord, anything else for Windows' notification centre
 - **Music**: what's playing, with previous / play-pause / next
 - **Open windows**: their icons; click to switch, click again to minimise, right-click to pin, minimise or close
 - **Programs**: your pinned apps, files and folders; drag files onto the island to pin them

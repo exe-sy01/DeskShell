@@ -79,6 +79,7 @@ public partial class ShellWindow : Window
     {
         if (IsOpen) return;
         IsOpen = true;
+        var opening = System.Diagnostics.Stopwatch.StartNew();
 
         var screen = island?.Screen ?? ZoneManager.ScreenAtCursor();
         _island = island is { IsShowingPill: true } ? island : null;
@@ -136,6 +137,7 @@ public partial class ShellWindow : Window
             ContentScale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
         }
         _clock.Start();
+        if (opening.ElapsedMilliseconds > 400) Log.Info($"The shell took {opening.ElapsedMilliseconds} ms to open");
     }
 
     // ---------- the island morph ----------

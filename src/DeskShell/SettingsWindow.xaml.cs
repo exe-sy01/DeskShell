@@ -34,6 +34,7 @@ public partial class SettingsWindow : Window
         AppDrawerHotkey.Text = _draft.AppDrawerHotkey;
         WinKeyOpensDrawer.IsChecked = _draft.WinKeyOpensDrawer;
         IslandAppsButton.IsChecked = _draft.Island.AppsButton;
+        IslandDiscordMessages.IsChecked = _draft.Island.DiscordMessages;
         QuitHotkey.Text = _draft.QuitHotkey;
         GameModeOn.IsChecked = _draft.GameMode;
         GameModeDnd.IsChecked = _draft.GameModeDoNotDisturb;
@@ -181,6 +182,7 @@ public partial class SettingsWindow : Window
         _draft.AppDrawerHotkey = Hotkey(AppDrawerHotkey, "App-drawer");
         _draft.WinKeyOpensDrawer = WinKeyOpensDrawer.IsChecked == true;
         _draft.Island.AppsButton = IslandAppsButton.IsChecked == true;
+        _draft.Island.DiscordMessages = IslandDiscordMessages.IsChecked == true;
         _draft.QuitHotkey = Hotkey(QuitHotkey, "Quit");
         _draft.StartWithWindows = StartWithWindows.IsChecked == true;
         _draft.GameMode = GameModeOn.IsChecked == true;
