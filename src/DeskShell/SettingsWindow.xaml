@@ -103,6 +103,10 @@
                     <TextBlock x:Name="IslandImportStatus" Style="{StaticResource Note}" VerticalAlignment="Center" Margin="12,0,0,0" />
                 </StackPanel>
 
+                <TextBlock Style="{StaticResource Section}" Text="Windows taskbar" />
+                <CheckBox x:Name="ShowWindowsTaskbar" Style="{StaticResource Switch}" Margin="0,4,0,8"
+                          Content="Show the Windows taskbar, with the tray icons, alongside the island" />
+
                 <TextBlock Style="{StaticResource Section}" Text="Dock" />
                 <CheckBox x:Name="ShowDock" Style="{StaticResource Switch}" Margin="0,4,0,10"
                           Content="Show the dock at the bottom of the screen (the island replaces it)" />

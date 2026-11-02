@@ -157,6 +157,7 @@
                     <MenuItem Header="All apps" Click="Apps_Click" />
                     <MenuItem x:Name="PillTools" Header="Tools" />
                     <MenuItem Header="Open the shell" Click="OpenShell_Click" />
+                    <MenuItem x:Name="PillTaskbar" Click="PillTaskbar_Click" />
                     <MenuItem Header="DeskShell settings" Click="Settings_Click" />
                 </ContextMenu>
             </Border.ContextMenu>

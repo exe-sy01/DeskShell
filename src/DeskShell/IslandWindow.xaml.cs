@@ -1038,7 +1038,13 @@ public partial class IslandWindow : Window
         }
     }
 
-    void PillMenu_Opened(object sender, RoutedEventArgs e) => _menuOpen = true;
+    void PillMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        _menuOpen = true;
+        PillTaskbar.Header = App.Settings.ShowWindowsTaskbar ? "Hide the Windows taskbar" : "Show the Windows taskbar";
+    }
+
+    void PillTaskbar_Click(object sender, RoutedEventArgs e) => App.Instance.SetWindowsTaskbar(!App.Settings.ShowWindowsTaskbar);
 
     void PillMenu_Closed(object sender, RoutedEventArgs e)
     {

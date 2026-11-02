@@ -76,6 +76,8 @@ public partial class ShellWindow : Window
     /// <summary>The island the shell grew out of, if any; it shrinks back into it on close.</summary>
     IslandWindow? _island;
 
+    double _bottomStrip;
+
     public void OpenShell(IslandWindow? island = null)
     {
         if (IsOpen) return;
@@ -103,6 +105,7 @@ public partial class ShellWindow : Window
         // The shell hangs from the top of the screen, level with the island, in the island's style.
         var style = App.Settings.Island;
         ShellPanel.Margin = new Thickness(0, style.TopGap, 0, 0);
+        _bottomStrip = App.Instance.BottomStrip(screen);
         Card.CornerRadius = new CornerRadius(style.ShellRadius);
         _board.Left.CornerRadius = _board.Right.CornerRadius = new CornerRadius(Math.Max(6, style.ShellRadius - 4));
         Backdrop.Background = new SolidColorBrush(Color.FromArgb((byte)Math.Round(Math.Clamp(style.Dim, 0, 100) * 2.55), 0, 0, 0));
@@ -275,8 +278,8 @@ public partial class ShellWindow : Window
     {
         const double sideGap = 16, sideMin = 300, sideMax = 380;
         ShellPanel.LayoutTransform = Transform.Identity;
-        // Hangs from the top; keep clear of the dock at the bottom.
-        var availableHeight = ActualHeight - ShellPanel.Margin.Top - (App.Settings.ShowDock ? App.Settings.DockHeight : 0) - 24;
+        // Hangs from the top; keep clear of the dock or taskbar at the bottom.
+        var availableHeight = ActualHeight - ShellPanel.Margin.Top - _bottomStrip - 24;
         var availableWidth = ActualWidth - 80;
 
         var sideWidth = Math.Min(sideMax, (availableWidth - Card.Width) / 2 - sideGap);

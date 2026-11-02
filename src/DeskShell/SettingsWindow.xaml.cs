@@ -41,6 +41,7 @@ public partial class SettingsWindow : Window
         ShowIsland.IsChecked = _draft.ShowIsland;
         IslandOnAllMonitors.IsChecked = _draft.IslandOnAllMonitors;
         IslandReserveSpace.IsChecked = _draft.IslandReserveSpace;
+        ShowWindowsTaskbar.IsChecked = _draft.ShowWindowsTaskbar;
         ShowDock.IsChecked = _draft.ShowDock;
         DockOnAllMonitors.IsChecked = _draft.DockOnAllMonitors;
         DockHeight.Text = _draft.DockHeight.ToString(CultureInfo.InvariantCulture);
@@ -190,6 +191,7 @@ public partial class SettingsWindow : Window
         _draft.ShowIsland = ShowIsland.IsChecked == true;
         _draft.IslandOnAllMonitors = IslandOnAllMonitors.IsChecked == true;
         _draft.IslandReserveSpace = IslandReserveSpace.IsChecked == true;
+        _draft.ShowWindowsTaskbar = ShowWindowsTaskbar.IsChecked == true;
         _draft.ShowDock = ShowDock.IsChecked == true;
         _draft.DockOnAllMonitors = DockOnAllMonitors.IsChecked == true;
         if (double.TryParse(DockHeight.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var h) && h is >= 40 and <= 120)

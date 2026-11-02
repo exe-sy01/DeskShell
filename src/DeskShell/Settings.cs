@@ -144,6 +144,9 @@ public sealed class Settings
     public string IslandPage { get; set; } = "windows";
     public IslandStyle Island { get; set; } = new();
 
+    /// <summary>Leave Windows' own taskbar on screen, with the tray icons, alongside the island.</summary>
+    public bool ShowWindowsTaskbar { get; set; }
+
     // Dock
     /// <summary>The bottom dock (replaced by the island; off unless turned back on).</summary>
     public bool ShowDock { get; set; }

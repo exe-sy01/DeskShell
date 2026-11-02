@@ -117,7 +117,7 @@ public partial class AppDrawerWindow : Window
         var scale = WmNative.ScaleFor(screen.HMonitor);
         var b = screen.Bounds;
         var top = hasIsland ? style.TopGap + style.Height + 8 : 12;
-        var bottomClear = App.Settings.ShowDock ? App.Settings.DockHeight : 0;
+        var bottomClear = App.Instance.BottomStrip(screen);
         Height = Math.Min(720, b.Height / scale - top - bottomClear - 8);
 
         SearchBox.Text = "";

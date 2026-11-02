@@ -19,7 +19,7 @@ Or run from source without installing: `dotnet run --project src/DeskShell`.
 
 **Getting the normal taskbar back:** `Ctrl+Alt+Shift+Q` or the ✕ in the shell. If DeskShell crashes or is killed, a small watchdog process restores the taskbar automatically.
 
-DeskShell never changes the Windows taskbar's settings (such as auto-hide). It only hides the taskbar window and reserves a strip at the bottom of each screen for the dock, and gives both back when it quits.
+DeskShell never changes the Windows taskbar's settings (such as auto-hide). It only hides the taskbar window and reserves a strip at the bottom of each screen for the dock, and gives both back when it quits. To keep the Windows taskbar on screen alongside the island, right-click the island and choose **Show the Windows taskbar**, or use the switch in Settings.
 
 ## Look
 

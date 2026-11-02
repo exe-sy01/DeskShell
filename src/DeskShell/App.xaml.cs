@@ -111,9 +111,10 @@ public partial class App : Application
     /// </summary>
     async Task FinishStartupAsync()
     {
-        _hider!.Start();
+        if (!Settings.ShowWindowsTaskbar) _hider!.Start();
         await WaitForWorkAreaToSettle();
         if (_quitting) return;
+        if (Settings.ShowWindowsTaskbar) HandTrayToWindows();
 
         var apps = _apps = new AppIndex();
         apps.Start();
@@ -223,6 +224,7 @@ public partial class App : Application
     /// <summary>Called by the settings window after saving.</summary>
     public void ApplySettings(Settings updated)
     {
+        var taskbarChanged = updated.ShowWindowsTaskbar != Settings.ShowWindowsTaskbar;
         var dockChanged = updated.ShowIsland != Settings.ShowIsland || updated.IslandOnAllMonitors != Settings.IslandOnAllMonitors ||
                           updated.IslandReserveSpace != Settings.IslandReserveSpace ||
                           System.Text.Json.JsonSerializer.Serialize(updated.Island) != System.Text.Json.JsonSerializer.Serialize(Settings.Island) ||
@@ -239,7 +241,55 @@ public partial class App : Application
         }
         StartupRegistration.Apply(Settings.StartWithWindows);
         _shellWindow?.UpdateHint();
+        if (taskbarChanged) ApplyWindowsTaskbar();
         if (dockChanged) RebuildBars("settings changed");
+        else if (taskbarChanged) ReserveSpace();
+    }
+
+    public void SetWindowsTaskbar(bool show)
+    {
+        var updated = Settings.Clone();
+        updated.ShowWindowsTaskbar = show;
+        ApplySettings(updated);
+    }
+
+    void ApplyWindowsTaskbar()
+    {
+        Log.Info(Settings.ShowWindowsTaskbar ? "Showing the Windows taskbar" : "Hiding the Windows taskbar");
+        if (Settings.ShowWindowsTaskbar)
+        {
+            _hider?.Stop();
+            HandTrayToWindows();
+        }
+        else
+        {
+            _hider?.Start();
+            CallTrayService("Resume");
+            AskTrayAppsToReAddIcons();
+        }
+    }
+
+    /// <summary>Tray apps talk to whichever tray is in front; ours steps back so their icons appear on the Windows taskbar.</summary>
+    void HandTrayToWindows()
+    {
+        CallTrayService("Suspend");
+        AskTrayAppsToReAddIcons();
+    }
+
+    /// <summary>ManagedShell keeps these internal, so call them by name, like SendTaskbarCreated below.</summary>
+    void CallTrayService(string name)
+    {
+        try
+        {
+            var method = Shell.TrayService.GetType().GetMethod(name,
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+            if (method == null) Log.Error($"ManagedShell's tray has no {name} any more");
+            else method.Invoke(Shell.TrayService, null);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"ManagedShell's tray failed to {name}", ex);
+        }
     }
 
     public void ResetTiles() => _shellWindow?.ResetTiles();
@@ -261,10 +311,8 @@ public partial class App : Application
     {
         _workArea ??= new WorkAreaReserver();
         var all = AppBarScreen.FromAllScreens();
-        var islandScreens = !Settings.ShowIsland ? new List<AppBarScreen>()
-            : Settings.IslandOnAllMonitors ? all : all.Where(s => s.Primary).Take(1).ToList();
-        var dockScreens = !Settings.ShowDock ? new List<AppBarScreen>()
-            : Settings.DockOnAllMonitors ? all : all.Where(s => s.Primary).Take(1).ToList();
+        var islandScreens = IslandScreens(all);
+        var dockScreens = DockScreens(all);
 
         foreach (var screen in islandScreens)
         {
@@ -279,10 +327,32 @@ public partial class App : Application
             _docks.Add(dock);
         }
 
+        ReserveSpace();
+    }
+
+    List<AppBarScreen> IslandScreens(List<AppBarScreen> all) => !Settings.ShowIsland ? new List<AppBarScreen>()
+        : Settings.IslandOnAllMonitors ? all : all.Where(s => s.Primary).Take(1).ToList();
+
+    List<AppBarScreen> DockScreens(List<AppBarScreen> all) => !Settings.ShowDock ? new List<AppBarScreen>()
+        : Settings.DockOnAllMonitors ? all : all.Where(s => s.Primary).Take(1).ToList();
+
+    /// <summary>What the dock or the Windows taskbar covers at the bottom of a screen, in device-independent pixels.</summary>
+    public double BottomStrip(AppBarScreen screen)
+    {
+        var dock = DockScreens(AppBarScreen.FromAllScreens()).Any(s => s.HMonitor == screen.HMonitor) ? Settings.DockHeight : 0.0;
+        if (!Settings.ShowWindowsTaskbar) return dock;
+        return Math.Max(dock, TaskbarHider.BottomStrip(screen.Bounds) / WindowManagement.WmNative.ScaleFor(screen.HMonitor));
+    }
+
+    void ReserveSpace()
+    {
+        var all = AppBarScreen.FromAllScreens();
+        var islandScreens = IslandScreens(all);
+
         // Every screen gets its usable area set, so the hidden taskbar's strip goes to windows even where there's no bar.
-        _workArea.Reserve(all.Select(screen => (screen,
+        _workArea?.Reserve(all.Select(screen => (screen,
             Settings.IslandReserveSpace && islandScreens.Any(s => s.HMonitor == screen.HMonitor) ? Settings.Island.ReservedHeight : 0,
-            dockScreens.Any(s => s.HMonitor == screen.HMonitor) ? Settings.DockHeight : 0.0)));
+            BottomStrip(screen))));
     }
 
     void CloseBars()
@@ -351,6 +421,7 @@ public partial class App : Application
             {
                 await Task.Delay(4000);
                 Log.Info($"After Explorer restart: {Shell.NotificationArea.TrayIcons.Count} tray icons (had {before})");
+                if (Settings.ShowWindowsTaskbar) ReserveSpace(); // its new taskbar exists by now
             });
         };
     }
