@@ -80,7 +80,13 @@
                     <Button Style="{StaticResource PillButton}" Tag="&#xE8B7;" Content="Files" Margin="0,0,6,0" Click="Files_Click" />
                     <Button Style="{StaticResource PillButton}" Tag="&#xE896;" Content="Downloads" Margin="0,0,6,0" Click="Downloads_Click" />
                     <Button Style="{StaticResource PillButton}" Tag="&#xE8A5;" Content="Documents" Margin="0,0,6,0" Click="Documents_Click" />
-                    <Button Style="{StaticResource PillButton}" Tag="&#xE713;" Content="Settings" Click="WindowsSettings_Click" />
+                    <Button Style="{StaticResource PillButton}" Tag="&#xE713;" Content="Settings" Margin="0,0,6,0" Click="WindowsSettings_Click" />
+                    <Button x:Name="ToolsButton" Style="{StaticResource PillButton}" Tag="&#xE756;" Content="Tools" Click="Tools_Click"
+                            ToolTip="Command Prompt, PowerShell and system tools, also as administrator">
+                        <Button.ContextMenu>
+                            <ContextMenu />
+                        </Button.ContextMenu>
+                    </Button>
                 </StackPanel>
                 <TextBlock x:Name="PowerPrompt" VerticalAlignment="Center" FontSize="13" Foreground="{DynamicResource TextDimBrush}" Visibility="Collapsed" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">

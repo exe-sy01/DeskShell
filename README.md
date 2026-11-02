@@ -43,7 +43,7 @@ DeskShell doesn't include its own file manager; it's set up alongside [Files](ht
 
 The old **dock** at the bottom is still there if you want it (Settings → Dock); it's off by default now.
 
-**App drawer** (tap the Windows key, the all-apps button on the island, *All apps* in the shell, or `Alt+Shift+Space`): DeskShell's Start menu. Search, pinned, recent and every app A-Z, plus Files, Downloads, Documents, Settings and power buttons. Works by keyboard alone: type to search, arrows to move, Enter to open, Esc to close. Windows-key shortcuts such as Win+E still work, and during games the key goes back to Windows. Settings > General turns the Windows-key part off.
+**App drawer** (tap the Windows key, the all-apps button on the island, *All apps* in the shell, or `Alt+Shift+Space`): DeskShell's Start menu. Search, pinned, recent and every app A-Z, plus Files, Downloads, Documents, Settings and power buttons. Works by keyboard alone: type to search, arrows to move, Enter to open, Ctrl+Shift+Enter to run as administrator, Esc to close. **Tools** (a button in the drawer and the shell, or right-click the island's all-apps button) has Terminal, Command Prompt and PowerShell, each also as administrator, plus Task Manager, Services, Device Manager, Disk Management, Event Viewer, Network Connections, Registry Editor and Run. Windows-key shortcuts such as Win+E still work, and during games the key goes back to Windows. Settings > General turns the Windows-key part off.
 
 **Shell** (double-click the island, or `Alt+Space`): type to search and launch any app. Tiles below, all movable and resizable with **Customise**:
 

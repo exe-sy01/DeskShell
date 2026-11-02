@@ -57,6 +57,7 @@ public partial class ShellWindow : Window
         RightHost.Content = _board.Right;
         BuildTiles();
         UpdateHint();
+        ToolsMenu.Fill(ToolsButton.ContextMenu, () => CloseShell(immediate: true));
 
         _clock = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => UpdateClock(), Dispatcher);
         _clock.Stop();
@@ -397,7 +398,19 @@ public partial class ShellWindow : Window
                 e.Handled = true;
                 break;
             case Key.Enter:
-                if (Results.SelectedItem is AppResult app) Launch(app);
+                if (Results.SelectedItem is AppResult app)
+                {
+                    // Ctrl+Shift+Enter runs it as administrator, as in the Start menu
+                    if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && !app.Target.StartsWith("game:") && AppIndex.CanRunAsAdmin(app.Target))
+                    {
+                        CloseShell(immediate: true);
+                        AppIndex.RunAsAdmin(app.Target);
+                    }
+                    else
+                    {
+                        Launch(app);
+                    }
+                }
                 e.Handled = true;
                 break;
         }
@@ -446,6 +459,18 @@ public partial class ShellWindow : Window
             e.Handled = true;
             return;
         }
+        if (AppIndex.CanRunAsAdmin(app.Target))
+        {
+            var admin = new MenuItem { Header = "Run as administrator" };
+            admin.Click += (_, _) =>
+            {
+                CloseShell(immediate: true);
+                AppIndex.RunAsAdmin(app.Target);
+            };
+            menu.Items.Add(admin);
+            menu.Items.Add(new Separator());
+        }
+
         var pinned = App.Settings.PinnedApps.Any(p => p.Target == app.Target);
         var pin = new MenuItem { Header = pinned ? "Unpin" : "Pin to shell" };
         pin.Click += (_, _) =>
@@ -554,6 +579,13 @@ public partial class ShellWindow : Window
     void Customise_Click(object sender, RoutedEventArgs e) => SetEditing(!_editing);
 
     void AllApps_Click(object sender, RoutedEventArgs e) => App.Instance.ToggleAppDrawer();
+
+    void Tools_Click(object sender, RoutedEventArgs e)
+    {
+        ToolsButton.ContextMenu.PlacementTarget = ToolsButton;
+        ToolsButton.ContextMenu.Placement = PlacementMode.Top;
+        ToolsButton.ContextMenu.IsOpen = true;
+    }
 
     async void Update_Click(object sender, RoutedEventArgs e)
     {

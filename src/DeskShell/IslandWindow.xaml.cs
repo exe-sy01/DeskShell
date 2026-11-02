@@ -137,6 +137,8 @@ public partial class IslandWindow : Window
         _momentTimer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher);
         _momentTimer.Tick += (_, _) => EndMoment();
         BuildPages();
+        ToolsMenu.Fill(AppsButton.ContextMenu);
+        ToolsMenu.Fill(PillTools);
         ApplyStyle();
 
         _media.Changed += OnMediaChanged;

@@ -155,6 +155,7 @@
             <Border.ContextMenu>
                 <ContextMenu Opened="PillMenu_Opened" Closed="PillMenu_Closed">
                     <MenuItem Header="All apps" Click="Apps_Click" />
+                    <MenuItem x:Name="PillTools" Header="Tools" />
                     <MenuItem Header="Open the shell" Click="OpenShell_Click" />
                     <MenuItem Header="DeskShell settings" Click="Settings_Click" />
                 </ContextMenu>
@@ -168,7 +169,10 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button x:Name="AppsButton" Style="{StaticResource IslandButton}" Click="Apps_Click" ToolTip="All apps" AutomationProperties.Name="All apps">
+                        <Button x:Name="AppsButton" Style="{StaticResource IslandButton}" Click="Apps_Click" ToolTip="All apps (right-click for tools)" AutomationProperties.Name="All apps">
+                            <Button.ContextMenu>
+                                <ContextMenu Opened="PillMenu_Opened" Closed="PillMenu_Closed" />
+                            </Button.ContextMenu>
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE71D;" FontSize="13" />
                         </Button>
                         <Button x:Name="PrevButton" Style="{StaticResource IslandButton}" Click="Prev_Click" AutomationProperties.Name="Previous page">

@@ -157,6 +157,11 @@ public sealed class AppIndex
         return i == q.Length && q.Length >= 3 ? 30 : 0;
     }
 
+    /// <summary>Store apps (ids with a "!") can't run as administrator.</summary>
+    public static bool CanRunAsAdmin(string target) => !target.Contains('!');
+
+    public static void RunAsAdmin(string target) => ToolsMenu.Run($"shell:AppsFolder\\{target}", admin: true);
+
     public static void Launch(string target)
     {
         try

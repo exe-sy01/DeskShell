@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -99,6 +100,7 @@ public partial class AppDrawerWindow : Window
         ThemeManager.AlwaysDark(Resources);
         _apps = apps;
         Deactivated += (_, _) => CloseDrawer();
+        ToolsMenu.Fill(ToolsButton.ContextMenu, CloseDrawer);
         new WindowInteropHelper(this).EnsureHandle();
     }
 
@@ -294,7 +296,9 @@ public partial class AppDrawerWindow : Window
                 else CloseDrawer();
                 break;
             case Key.Enter when _selected >= 0:
-                Run(_cells[_selected]);
+                // Ctrl+Shift+Enter runs it as administrator, as in the Start menu
+                if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && _cells[_selected].AppTarget is { } target && AppIndex.CanRunAsAdmin(target)) RunAsAdmin(target);
+                else Run(_cells[_selected]);
                 break;
             case Key.Down:
                 MoveRows(1);
@@ -329,6 +333,13 @@ public partial class AppDrawerWindow : Window
         catch (Exception ex) { Log.Error($"Could not open {cell.Name}", ex); }
     }
 
+    void RunAsAdmin(string target)
+    {
+        CloseDrawer();
+        App.Settings.RecordRecentApp(target);
+        AppIndex.RunAsAdmin(target);
+    }
+
     void Cell_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is DrawerCell cell) Run(cell);
@@ -361,6 +372,7 @@ public partial class AppDrawerWindow : Window
             return item;
         }
         Add("Open", () => Run(cell));
+        if (AppIndex.CanRunAsAdmin(target)) Add("Run as administrator", () => RunAsAdmin(target));
         if (DockPins.Contains("app", target))
             Add("Unpin", () =>
             {
@@ -394,6 +406,13 @@ public partial class AppDrawerWindow : Window
     void Files_Click(object sender, RoutedEventArgs e) => OpenThing(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
     void Documents_Click(object sender, RoutedEventArgs e) => OpenThing(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
     void WindowsSettings_Click(object sender, RoutedEventArgs e) => OpenThing("ms-settings:");
+
+    void Tools_Click(object sender, RoutedEventArgs e)
+    {
+        ToolsButton.ContextMenu.PlacementTarget = ToolsButton;
+        ToolsButton.ContextMenu.Placement = PlacementMode.Top;
+        ToolsButton.ContextMenu.IsOpen = true;
+    }
 
     void Downloads_Click(object sender, RoutedEventArgs e)
     {
