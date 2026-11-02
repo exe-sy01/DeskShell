@@ -86,8 +86,6 @@ public partial class ShellWindow : Window
         _island = island is { IsShowingPill: true } ? island : null;
         UpdateClock();
         SearchBox.Text = "";
-        foreach (var host in Hosts) SafeCall(host.Tile.OnOpened);
-        _ = BadgeService.Instance.RefreshAsync();
         _board.Open(WmNative.GetForegroundWindow());
         var update = UpdateService.Available;
         UpdateButton.Visibility = update != null ? Visibility.Visible : Visibility.Collapsed;
@@ -138,7 +136,26 @@ public partial class ShellWindow : Window
             ContentScale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
         }
         _clock.Start();
-        if (opening.ElapsedMilliseconds > 400) Log.Info($"The shell took {opening.ElapsedMilliseconds} ms to open");
+        if (opening.ElapsedMilliseconds > 300) Log.Info($"The shell took {opening.ElapsedMilliseconds} ms to open");
+        _ = RefreshTilesAsync();
+    }
+
+    int _openings;
+
+    /// <summary>
+    /// Brings the tiles up to date after the shell is on screen, one at a time at low priority, so
+    /// opening stays instant and the animation keeps running in between.
+    /// </summary>
+    async Task RefreshTilesAsync()
+    {
+        var opening = ++_openings;
+        foreach (var host in Hosts.ToList())
+        {
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            if (!IsOpen || opening != _openings) return; // closed, or opened again, in the meantime
+            SafeCall(host.Tile.OnOpened);
+        }
+        _ = BadgeService.Instance.RefreshAsync();
     }
 
     // ---------- the island morph ----------

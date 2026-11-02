@@ -28,11 +28,16 @@ public static class VoicemeeterService
     static SetFloat? _setFloat;
     static GetStringW? _getString;
     static bool _loggedIn, _triedLoad;
+    // The mixer reads on a background thread and writes from another; one call at a time
+    static readonly object Gate = new();
 
     public const float MinGain = -60, MaxGain = 12;
 
     /// <summary>Voicemeeter is installed and running, and we're connected to it.</summary>
-    public static bool IsAvailable => Connect() && TypeNow() > 0;
+    public static bool IsAvailable
+    {
+        get { lock (Gate) return Connect() && TypeNow() > 0; }
+    }
 
     static bool Connect()
     {
@@ -86,6 +91,11 @@ public static class VoicemeeterService
     }
 
     public static List<VmChannel> Channels()
+    {
+        lock (Gate) return ReadChannels();
+    }
+
+    static List<VmChannel> ReadChannels()
     {
         var list = new List<VmChannel>();
         if (!IsAvailable) return list;
@@ -148,20 +158,23 @@ public static class VoicemeeterService
 
     public static void SetGain(VmChannel channel, float db)
     {
-        try { _setFloat?.Invoke($"{channel.Param}.Gain", Math.Clamp(db, MinGain, MaxGain)); }
+        try { lock (Gate) _setFloat?.Invoke($"{channel.Param}.Gain", Math.Clamp(db, MinGain, MaxGain)); }
         catch (Exception ex) { Log.Error("Voicemeeter gain change failed", ex); }
     }
 
     public static void SetMuted(VmChannel channel, bool muted)
     {
-        try { _setFloat?.Invoke($"{channel.Param}.Mute", muted ? 1f : 0f); }
+        try { lock (Gate) _setFloat?.Invoke($"{channel.Param}.Mute", muted ? 1f : 0f); }
         catch (Exception ex) { Log.Error("Voicemeeter mute change failed", ex); }
     }
 
     public static void Disconnect()
     {
-        if (!_loggedIn) return;
-        try { _logout?.Invoke(); } catch { }
-        _loggedIn = false;
+        lock (Gate)
+        {
+            if (!_loggedIn) return;
+            try { _logout?.Invoke(); } catch { }
+            _loggedIn = false;
+        }
     }
 }

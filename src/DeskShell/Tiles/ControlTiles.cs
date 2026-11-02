@@ -365,12 +365,34 @@ public sealed class MixerTile : TileBase
     public override string Title => "Mixer";
     public override (int W, int H)[] Sizes => [(2, 3), (2, 4), (4, 3), (2, 2), (4, 2)];
 
-    public override void OnOpened()
-    {
-        _rows.Children.Clear();
+    int _reads;
+    Task _writes = Task.CompletedTask;
 
-        var outputs = AudioService.GetOutputsWithApps();
-        var channels = VoicemeeterService.IsAvailable ? VoicemeeterService.Channels() : new();
+    /// <summary>Changes volumes off the UI thread, in the order they were made (a slider sends many).</summary>
+    void Write(Action change) => _writes = _writes.ContinueWith(_ =>
+    {
+        try { change(); }
+        catch (Exception ex) { Log.Error("Mixer change failed", ex); }
+    }, TaskScheduler.Default);
+
+    /// <summary>Asking Windows and Voicemeeter takes a while, so that happens in the background.</summary>
+    public override async void OnOpened()
+    {
+        var read = ++_reads;
+        List<OutputAudio> outputs;
+        List<VmChannel> channels;
+        try
+        {
+            (outputs, channels) = await Task.Run(() => (AudioService.GetOutputsWithApps(), VoicemeeterService.IsAvailable ? VoicemeeterService.Channels() : new List<VmChannel>()));
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Mixer couldn't read the audio state", ex);
+            return;
+        }
+        if (read != _reads) return;
+
+        _rows.Children.Clear();
         var strips = channels.Where(c => !c.IsBus).ToList();
 
         // Voicemeeter's devices (VAIO, AUX, VAIO3) first and always, even with nothing playing;
@@ -401,22 +423,28 @@ public sealed class MixerTile : TileBase
         var key = strip?.Key ?? name;
         var header = strip != null
             ? Row(OutputIcon(), name, sub, VoicemeeterService.MinGain, VoicemeeterService.MaxGain, strip.Gain, v => $"{v:+0;-0;0} dB", strip.Muted,
-                v => VoicemeeterService.SetGain(strip, (float)v),
-                m => VoicemeeterService.SetMuted(strip, m))
+                v => Write(() => VoicemeeterService.SetGain(strip, (float)v)),
+                m => Write(() => VoicemeeterService.SetMuted(strip, m)))
             : Row(OutputIcon(), name, sub, 0, 100, output!.Volume * 100, v => $"{v:0}%", output.Muted,
-                v => AudioService.SetOutputVolume(output, (float)v / 100f),
-                m => AudioService.SetOutputMuted(output, m));
+                v => Write(() => AudioService.SetOutputVolume(output, (float)v / 100f)),
+                m => Write(() => AudioService.SetOutputMuted(output, m)));
         _rows.Children.Add(header);
         if (apps.Count == 0) return;
 
         var list = new StackPanel { Margin = new Thickness(18, 0, 0, 4), Visibility = Expanded.Contains(key) ? Visibility.Visible : Visibility.Collapsed };
-        foreach (var app in apps)
+        // Built when first shown: looking up every app's icon is slow, and most outputs stay closed
+        void FillList()
         {
-            var a = app;
-            list.Children.Add(Row(AppIcon(a), a.Name, null, 0, 100, a.Volume * 100, v => $"{v:0}%", a.Muted,
-                v => AudioService.SetAppVolume(a, (float)v / 100f),
-                m => AudioService.SetAppMuted(a, m)));
+            if (list.Children.Count > 0) return;
+            foreach (var app in apps)
+            {
+                var a = app;
+                list.Children.Add(Row(AppIcon(a), a.Name, null, 0, 100, a.Volume * 100, v => $"{v:0}%", a.Muted,
+                    v => Write(() => AudioService.SetAppVolume(a, (float)v / 100f)),
+                    m => Write(() => AudioService.SetAppMuted(a, m))));
+            }
         }
+        if (Expanded.Contains(key)) FillList();
         _rows.Children.Add(list);
 
         if (header is Panel fe)
@@ -427,6 +455,7 @@ public sealed class MixerTile : TileBase
             {
                 e.Handled = true;
                 var show = list.Visibility != Visibility.Visible;
+                if (show) FillList();
                 list.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
                 if (show) Expanded.Add(key); else Expanded.Remove(key);
             };
@@ -438,13 +467,15 @@ public sealed class MixerTile : TileBase
     void AddVm(VmChannel channel) =>
         _rows.Children.Add(Row(Icon(channel.IsBus ? "" : "", 14), channel.Name, null,
             VoicemeeterService.MinGain, VoicemeeterService.MaxGain, channel.Gain, v => $"{v:+0;-0;0} dB", channel.Muted,
-            v => VoicemeeterService.SetGain(channel, (float)v),
-            m => VoicemeeterService.SetMuted(channel, m)));
+            v => Write(() => VoicemeeterService.SetGain(channel, (float)v)),
+            m => Write(() => VoicemeeterService.SetMuted(channel, m))));
+
+    static readonly Dictionary<string, ImageSource?> AppIcons = new(StringComparer.OrdinalIgnoreCase);
 
     static UIElement AppIcon(AppAudio app)
     {
         ImageSource? icon = null;
-        if (app.ExePath != null)
+        if (app.ExePath != null && !AppIcons.TryGetValue(app.ExePath, out icon))
         {
             try
             {
@@ -453,6 +484,7 @@ public sealed class MixerTile : TileBase
                 icon = item.SmallIcon;
             }
             catch { }
+            AppIcons[app.ExePath] = icon;
         }
         return icon != null
             ? new Image { Source = icon, Width = 16, Height = 16 }
