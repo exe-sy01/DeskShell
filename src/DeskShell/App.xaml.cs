@@ -24,6 +24,7 @@ public partial class App : Application
     readonly List<IslandWindow> _islands = new();
     AppIndex? _apps;
     AppDrawerWindow? _drawer;
+    TaskManagerWindow? _taskManager;
 
     /// <summary>Now playing, shared by the island and the shell.</summary>
     public MediaService Media { get; } = new();
@@ -144,8 +145,9 @@ public partial class App : Application
             Zones.OnMoveSizeEnd(hwnd);
             Dispatcher.BeginInvoke(() => _placer.Remember(hwnd), DispatcherPriority.Background);
         };
-        _altTab = new AltTabController(Shell, mru) { CatchWinKey = Settings.WinKeyOpensDrawer };
+        _altTab = new AltTabController(Shell, mru) { CatchWinKey = Settings.WinKeyOpensDrawer, CatchTaskManagerKey = Settings.UseDeskShellTaskManager };
         _altTab.WinKeyTapped += ToggleAppDrawer;
+        _altTab.TaskManagerKey += OpenTaskManager;
         _drawer = new AppDrawerWindow(apps);
         Overview = new OverviewWindow(Shell);
 
@@ -238,6 +240,7 @@ public partial class App : Application
         {
             _altTab.Enabled = Settings.CustomAltTab;
             _altTab.CatchWinKey = Settings.WinKeyOpensDrawer;
+            _altTab.CatchTaskManagerKey = Settings.UseDeskShellTaskManager;
         }
         StartupRegistration.Apply(Settings.StartWithWindows);
         _shellWindow?.UpdateHint();
@@ -448,6 +451,32 @@ public partial class App : Application
     public void HideShell() => _shellWindow?.CloseShell(immediate: true);
 
     /// <summary>Opens the app drawer on the screen you're on, or closes it.</summary>
+    /// <summary>DeskShell's Task Manager, or Windows' if the settings say so.</summary>
+    public void OpenTaskManager()
+    {
+        if (!Settings.UseDeskShellTaskManager)
+        {
+            OpenWindowsTaskManager();
+            return;
+        }
+        HideShell();
+        _drawer?.CloseDrawer();
+        if (_taskManager == null)
+        {
+            _taskManager = new TaskManagerWindow();
+            _taskManager.Closed += (_, _) =>
+            {
+                _taskManager = null;
+                TrimMemorySoon(TimeSpan.FromSeconds(5));
+            };
+            _taskManager.Show();
+        }
+        if (_taskManager.WindowState == WindowState.Minimized) _taskManager.WindowState = WindowState.Normal;
+        WindowManagement.WmNative.Activate(new System.Windows.Interop.WindowInteropHelper(_taskManager).Handle);
+    }
+
+    public static void OpenWindowsTaskManager() => ToolsMenu.Run(System.IO.Path.Combine(Environment.SystemDirectory, "taskmgr.exe"));
+
     public void ToggleAppDrawer()
     {
         if (_drawer == null) return;

@@ -40,6 +40,9 @@ internal sealed class AltTabHook : IDisposable
     public volatile bool Suspended;
     /// <summary>A tap of the Windows key raises <see cref="WinTapped"/> instead of opening the Start menu.</summary>
     public volatile bool CatchWinKey;
+    /// <summary>Ctrl+Shift+Esc raises <see cref="TaskManagerKey"/> instead of opening Windows' Task Manager.</summary>
+    public volatile bool CatchTaskManagerKey;
+    bool _escCaught;
     long _heartbeat = Environment.TickCount64;
 
     public event Action<int>? Opened;
@@ -47,6 +50,7 @@ internal sealed class AltTabHook : IDisposable
     public event Action? Committed;
     public event Action? Cancelled;
     public event Action? WinTapped;
+    public event Action? TaskManagerKey;
 
     public AltTabHook(Dispatcher ui)
     {
@@ -152,6 +156,23 @@ internal sealed class AltTabHook : IDisposable
                 _ui.BeginInvoke(() => Moved?.Invoke(dir));
             }
             return true;
+        }
+
+        if (vk == VK_ESCAPE && !_active)
+        {
+            if (up && _escCaught)
+            {
+                _escCaught = false;
+                return true;
+            }
+            // Ctrl+Shift+Esc. Left to Windows during games and if DeskShell's UI isn't responding.
+            if (down && CatchTaskManagerKey && !Suspended && !_alt && _shift && (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
+                && Environment.TickCount64 - Interlocked.Read(ref _heartbeat) < 2000)
+            {
+                if (!_escCaught) _ui.BeginInvoke(() => TaskManagerKey?.Invoke());
+                _escCaught = true;
+                return true;
+            }
         }
 
         if (_active && down)
@@ -340,6 +361,7 @@ internal sealed class AltTabController : IDisposable
         };
 
         _hook.WinTapped += () => WinKeyTapped?.Invoke();
+        _hook.TaskManagerKey += () => TaskManagerKey?.Invoke();
         _heartbeat = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Normal, (_, _) => _hook.Beat(), Dispatcher.CurrentDispatcher);
         // Windows' own Alt+Tab while a game or video is in front.
         if (App.Fullscreen != null)
@@ -352,6 +374,11 @@ internal sealed class AltTabController : IDisposable
     public bool CatchWinKey { set => _hook.CatchWinKey = value; }
 
     public event Action? WinKeyTapped;
+
+    /// <summary>Whether Ctrl+Shift+Esc raises <see cref="TaskManagerKey"/>.</summary>
+    public bool CatchTaskManagerKey { set => _hook.CatchTaskManagerKey = value; }
+
+    public event Action? TaskManagerKey;
 
     void Open(int direction)
     {

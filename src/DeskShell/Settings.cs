@@ -132,6 +132,8 @@ public sealed class Settings
     public string AppDrawerHotkey { get; set; } = "Alt+Shift+Space";
     /// <summary>A tap of the Windows key opens the app drawer instead of the Start menu (Win+ shortcuts still work).</summary>
     public bool WinKeyOpensDrawer { get; set; } = true;
+    /// <summary>Ctrl+Shift+Esc and the Tools menus open DeskShell's Task Manager instead of Windows'.</summary>
+    public bool UseDeskShellTaskManager { get; set; } = true;
     /// <summary>Apps opened from the drawer, most recent first.</summary>
     public List<string> RecentApps { get; set; } = new();
 

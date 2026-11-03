@@ -40,7 +40,13 @@ public static class ToolsMenu
         Add("PowerShell (admin)", powerShell, admin: true);
 
         menu.Items.Add(new Separator());
-        Add("Task Manager", System32("taskmgr.exe"));
+        var taskManager = new MenuItem { Header = "Task Manager" };
+        taskManager.Click += (_, _) =>
+        {
+            beforeRun?.Invoke();
+            App.Instance.OpenTaskManager();
+        };
+        menu.Items.Add(taskManager);
         Add("Services", System32("services.msc"));
         Add("Device Manager", System32("devmgmt.msc"));
         Add("Disk Management", System32("diskmgmt.msc"));

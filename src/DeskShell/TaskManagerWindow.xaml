@@ -1,0 +1,279 @@
+<Window x:Class="DeskShell.TaskManagerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:DeskShell"
+        Title="Task Manager" Width="1000" Height="700" MinWidth="680" MinHeight="420"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource IslandBrush}" Foreground="{DynamicResource TextBrush}" FontFamily="{StaticResource UiFont}" FontSize="13"
+        UseLayoutRounding="True" PreviewKeyDown="Window_PreviewKeyDown">
+    <Window.Resources>
+        <Style x:Key="Tab" TargetType="RadioButton" BasedOn="{StaticResource ChipButton}">
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="GroupName" Value="Tabs" />
+        </Style>
+
+        <Style x:Key="ColumnHeader" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="HorizontalContentAlignment" Value="Right" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="Transparent" CornerRadius="4" Padding="8,4">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" TextElement.FontSize="12" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Row" TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Grid>
+                            <Border x:Name="Bg" Background="Transparent" CornerRadius="6">
+                                <ContentPresenter />
+                            </Border>
+                            <Border x:Name="Pill" Width="3" Height="16" CornerRadius="1.5" HorizontalAlignment="Left"
+                                    Background="{DynamicResource AccentBrush}" Visibility="Collapsed" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileHoverBrush}" />
+                                <Setter TargetName="Pill" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Cell" TargetType="Border">
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="Margin" Value="1,1" />
+            <Setter Property="CornerRadius" Value="4" />
+        </Style>
+        <Style x:Key="CellText" TargetType="TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="FontSize" Value="12.5" />
+        </Style>
+
+        <!-- A process, an app group or a section heading -->
+        <DataTemplate x:Key="ProcessRow" DataType="{x:Type local:TaskRow}">
+            <Grid Height="32" Background="Transparent" MouseLeftButtonDown="Row_MouseLeftButtonDown">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="{x:Static local:TaskManagerWindow.CpuWidth}" />
+                    <ColumnDefinition Width="{x:Static local:TaskManagerWindow.MemoryWidth}" />
+                    <ColumnDefinition Width="{x:Static local:TaskManagerWindow.IoWidth}" />
+                    <ColumnDefinition Width="{x:Static local:TaskManagerWindow.GpuWidth}" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" Margin="{Binding Indent}" VerticalAlignment="Center">
+                    <Button Width="22" Height="22" Click="Expand_Click" Focusable="False" Visibility="{Binding ChevronVisibility}"
+                            Style="{StaticResource GhostButton}" Padding="0" Margin="0,0,2,0">
+                        <TextBlock Style="{StaticResource Icon}" Text="{Binding Chevron}" FontSize="9" Foreground="{DynamicResource TextDimBrush}" />
+                    </Button>
+                    <Grid Width="20" Height="20" Margin="0,0,10,0" Visibility="{Binding IconVisibility}">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE7C4;" FontSize="14" Foreground="{DynamicResource TextDimBrush}" />
+                        <Image Source="{Binding Icon}" RenderOptions.BitmapScalingMode="HighQuality" />
+                    </Grid>
+                    <TextBlock Text="{Binding Name}" FontWeight="{Binding Weight}" FontSize="{Binding NameSize}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Detail}" Foreground="{DynamicResource TextDimBrush}" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="12" />
+                </StackPanel>
+                <Border Grid.Column="1" Style="{StaticResource Cell}" Background="{Binding CpuHeat}">
+                    <TextBlock Style="{StaticResource CellText}" Text="{Binding CpuText}" />
+                </Border>
+                <Border Grid.Column="2" Style="{StaticResource Cell}" Background="{Binding MemoryHeat}">
+                    <TextBlock Style="{StaticResource CellText}" Text="{Binding MemoryText}" />
+                </Border>
+                <Border Grid.Column="3" Style="{StaticResource Cell}" Background="{Binding IoHeat}">
+                    <TextBlock Style="{StaticResource CellText}" Text="{Binding IoText}" />
+                </Border>
+                <Border Grid.Column="4" Style="{StaticResource Cell}" Background="{Binding GpuHeat}">
+                    <TextBlock Style="{StaticResource CellText}" Text="{Binding GpuText}" />
+                </Border>
+            </Grid>
+        </DataTemplate>
+
+        <!-- One graph in the performance sidebar -->
+        <DataTemplate x:Key="MeterButton" DataType="{x:Type local:Meter}">
+            <Grid Height="64">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="84" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Background="{DynamicResource TileBrush}" CornerRadius="4" Margin="0,8,12,8" ClipToBounds="True">
+                    <local:Sparkline Values="{Binding History}" Max="{Binding GraphMax}" Stroke="{Binding Brush}" Version="{Binding Version}" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Short}" Foreground="{DynamicResource TextDimBrush}" FontSize="12" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+    </Window.Resources>
+
+    <DockPanel>
+        <!-- Tabs and actions -->
+        <Grid DockPanel.Dock="Top" Margin="16,12,16,8">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <RadioButton x:Name="ProcessesTab" Style="{StaticResource Tab}" Content="Processes" IsChecked="True" Checked="Tab_Checked" />
+                <RadioButton x:Name="PerformanceTab" Style="{StaticResource Tab}" Content="Performance" Checked="Tab_Checked" />
+                <RadioButton x:Name="StartupTab" Style="{StaticResource Tab}" Content="Startup apps" Checked="Tab_Checked" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <TextBox x:Name="SearchBox" Style="{StaticResource SearchBox}" Tag="Search name or PID" Width="230" Height="32" FontSize="13"
+                         Margin="0,0,8,0" TextChanged="SearchBox_TextChanged" />
+                <Button Style="{StaticResource PillButton}" Tag="&#xE7C4;" Content="Run new task" Margin="0,0,8,0" Click="RunTask_Click"
+                        ToolTip="Open Windows' Run box" />
+                <Button x:Name="EndButton" Style="{StaticResource PillButton}" Tag="&#xE711;" Content="End task" Click="EndTask_Click"
+                        IsEnabled="False" ToolTip="End the selected app or process (Delete)" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Status line -->
+        <Grid DockPanel.Dock="Bottom" Margin="20,6,16,10">
+            <TextBlock x:Name="Status" Foreground="{DynamicResource TextDimBrush}" FontSize="12" VerticalAlignment="Center" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Style="{StaticResource GhostButton}" Width="NaN" Height="28" Click="Services_Click" Margin="0,0,4,0">
+                    <TextBlock Text="Services" FontSize="12" Margin="10,0" Foreground="{DynamicResource TextDimBrush}" />
+                </Button>
+                <Button Style="{StaticResource GhostButton}" Width="NaN" Height="28" Click="WindowsTaskManager_Click">
+                    <TextBlock Text="Open Windows Task Manager" FontSize="12" Margin="10,0" Foreground="{DynamicResource TextDimBrush}" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <Grid Margin="12,0,12,0">
+            <!-- Processes -->
+            <Grid x:Name="ProcessesPage">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid Margin="0,0,10,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="{x:Static local:TaskManagerWindow.CpuWidth}" />
+                        <ColumnDefinition Width="{x:Static local:TaskManagerWindow.MemoryWidth}" />
+                        <ColumnDefinition Width="{x:Static local:TaskManagerWindow.IoWidth}" />
+                        <ColumnDefinition Width="{x:Static local:TaskManagerWindow.GpuWidth}" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="NameHeader" Style="{StaticResource ColumnHeader}" HorizontalContentAlignment="Left" Tag="Name" Click="Header_Click" />
+                    <Button x:Name="CpuHeader" Grid.Column="1" Style="{StaticResource ColumnHeader}" Tag="Cpu" Click="Header_Click" />
+                    <Button x:Name="MemoryHeader" Grid.Column="2" Style="{StaticResource ColumnHeader}" Tag="Memory" Click="Header_Click"
+                            ToolTip="Private memory in use (active private working set)" />
+                    <Button x:Name="IoHeader" Grid.Column="3" Style="{StaticResource ColumnHeader}" Tag="Io" Click="Header_Click"
+                            ToolTip="Reads and writes per second: disk, network and devices" />
+                    <Button x:Name="GpuHeader" Grid.Column="4" Style="{StaticResource ColumnHeader}" Tag="Gpu" Click="Header_Click" />
+                </Grid>
+                <ListBox x:Name="Processes" Grid.Row="1" Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource Row}"
+                         ItemTemplate="{StaticResource ProcessRow}" SelectionMode="Single"
+                         VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="Processes_SelectionChanged"
+                         MouseDoubleClick="Processes_MouseDoubleClick" ContextMenuOpening="Processes_ContextMenuOpening">
+                    <ListBox.ContextMenu>
+                        <ContextMenu />
+                    </ListBox.ContextMenu>
+                </ListBox>
+            </Grid>
+
+            <!-- Performance -->
+            <Grid x:Name="PerformancePage" Visibility="Collapsed" Margin="4,4,4,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="260" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <ListBox x:Name="Meters" Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource Row}"
+                         ItemTemplate="{StaticResource MeterButton}" SelectionChanged="Meters_SelectionChanged"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" Margin="0,0,16,0" />
+                <Border Grid.Column="1" Background="{DynamicResource TileBrush}" CornerRadius="12" Padding="24,20" Margin="0,0,0,8">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid>
+                            <TextBlock x:Name="MeterTitle" FontFamily="{StaticResource DisplayFont}" FontSize="26" FontWeight="SemiBold" />
+                            <TextBlock x:Name="MeterNow" HorizontalAlignment="Right" VerticalAlignment="Bottom" FontSize="15" Foreground="{DynamicResource TextDimBrush}" />
+                        </Grid>
+                        <Grid Grid.Row="1" Margin="0,16,0,16">
+                            <Border BorderBrush="{DynamicResource EdgeBrush}" BorderThickness="1" CornerRadius="6" ClipToBounds="True">
+                                <local:Sparkline x:Name="BigGraph" Grid="True" />
+                            </Border>
+                            <TextBlock x:Name="GraphTop" Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="8,6" />
+                            <TextBlock Text="60 seconds" Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="8,6"
+                                       VerticalAlignment="Bottom" />
+                        </Grid>
+                        <ItemsControl x:Name="MeterFacts" Grid.Row="2">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Width="170" Margin="0,0,12,12">
+                                        <TextBlock Text="{Binding Key}" Foreground="{DynamicResource TextDimBrush}" FontSize="12" />
+                                        <TextBlock Text="{Binding Value}" FontSize="17" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- Startup apps -->
+            <Grid x:Name="StartupPage" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Foreground="{DynamicResource TextDimBrush}" FontSize="12" Margin="8,0,8,8" TextWrapping="Wrap"
+                           Text="Programs that start when you sign in. Turning one off keeps it installed; it just won't start by itself. Ones for all users ask for administrator permission." />
+                <ListBox x:Name="Startup" Grid.Row="1" Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource Row}"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type local:StartupRow}">
+                            <Grid Height="44" Margin="8,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Grid Width="24" Height="24" Margin="0,0,12,0">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE7C4;" FontSize="16" Foreground="{DynamicResource TextDimBrush}" />
+                                    <Image Source="{Binding Icon}" RenderOptions.BitmapScalingMode="HighQuality" />
+                                </Grid>
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Detail}" Foreground="{DynamicResource TextDimBrush}" FontSize="11.5" TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Command}" />
+                                </StackPanel>
+                                <CheckBox Grid.Column="2" Style="{StaticResource Switch}" IsChecked="{Binding Enabled, Mode=OneWay}"
+                                          Click="StartupSwitch_Click" VerticalAlignment="Center" Margin="12,0,0,0" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</Window>

@@ -47,6 +47,8 @@
                 <TextBlock Style="{StaticResource Note}" Text="Hotkeys are written like Alt+Space, Ctrl+Alt+Up or Win+Shift+S. A hotkey another app already uses won't work; DeskShell's log says which." />
                 <CheckBox x:Name="StartWithWindows" Style="{StaticResource Switch}" Content="Start DeskShell when I sign in to Windows" Margin="0,4,0,10" />
                 <CheckBox x:Name="WinKeyOpensDrawer" Style="{StaticResource Switch}" Content="Windows key opens the app drawer instead of the Start menu" Margin="0,0,0,10" />
+                <CheckBox x:Name="UseDeskShellTaskManager" Style="{StaticResource Switch}" Margin="0,0,0,10"
+                          Content="Use DeskShell's Task Manager for Ctrl+Shift+Esc (off: Windows' Task Manager)" />
                 <Grid Style="{StaticResource Row}">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="220" /><ColumnDefinition Width="220" /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource Label}" Text="Open the shell" />
