@@ -97,6 +97,7 @@ public static class Installer
                 return;
             }
             StartupRegistration.Apply(false);
+            Files.FolderHandler.Apply(false, InstalledExe);
             if (File.Exists(ShortcutPath)) File.Delete(ShortcutPath);
             Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, throwOnMissingSubKey: false);
             // This exe may be inside the folder, so a short-lived cmd deletes it after we exit.
@@ -147,6 +148,8 @@ public static class Installer
     {
         if (EventWaitHandle.TryOpenExisting(QuitEventName, out var quit))
             using (quit) quit.Set();
+        if (EventWaitHandle.TryOpenExisting(Files.FilesHost.QuitEventName, out var quitFiles))
+            using (quitFiles) quitFiles.Set();
         var me = Environment.ProcessId;
         var deadline = Environment.TickCount64 + 15000;
         while (Environment.TickCount64 < deadline)
@@ -156,7 +159,23 @@ public static class Installer
             foreach (var p in others) p.Dispose();
             Thread.Sleep(200);
         }
-        return false;
+        // One that's stuck while quitting is ended; its watchdog brings Windows' taskbar back.
+        foreach (var p in Process.GetProcessesByName("DeskShell").Where(p => p.Id != me))
+        {
+            try
+            {
+                Log.Error($"DeskShell {p.Id} didn't quit in time; ending it");
+                p.Kill();
+                p.WaitForExit(3000);
+            }
+            catch
+            {
+                // already gone
+            }
+            p.Dispose();
+        }
+        Thread.Sleep(1000);
+        return !Process.GetProcessesByName("DeskShell").Any(p => p.Id != me);
     }
 
     /// <summary>Called by the running app: quits when an installer or updater asks it to.</summary>

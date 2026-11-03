@@ -11,6 +11,11 @@ public static class Program
             TaskbarGuard.RunWatchdog(parentPid);
             return;
         }
+        if (args.Length > 0 && args[0] is "--files" or "--open")
+        {
+            Files.FilesHost.Run(args);
+            return;
+        }
         if (Installer.RunCommand(args)) return;
 
         var app = new App();

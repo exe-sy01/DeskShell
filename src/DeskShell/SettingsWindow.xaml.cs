@@ -34,6 +34,8 @@ public partial class SettingsWindow : Window
         AppDrawerHotkey.Text = _draft.AppDrawerHotkey;
         WinKeyOpensDrawer.IsChecked = _draft.WinKeyOpensDrawer;
         UseDeskShellTaskManager.IsChecked = _draft.UseDeskShellTaskManager;
+        UseDeskShellFiles.IsChecked = _draft.UseDeskShellFiles;
+        OpenAllFoldersInDeskShell.IsChecked = _draft.OpenAllFoldersInDeskShell;
         IslandAppsButton.IsChecked = _draft.Island.AppsButton;
         IslandDiscordMessages.IsChecked = _draft.Island.DiscordMessages;
         QuitHotkey.Text = _draft.QuitHotkey;
@@ -184,6 +186,8 @@ public partial class SettingsWindow : Window
         _draft.AppDrawerHotkey = Hotkey(AppDrawerHotkey, "App-drawer");
         _draft.WinKeyOpensDrawer = WinKeyOpensDrawer.IsChecked == true;
         _draft.UseDeskShellTaskManager = UseDeskShellTaskManager.IsChecked == true;
+        _draft.UseDeskShellFiles = UseDeskShellFiles.IsChecked == true;
+        _draft.OpenAllFoldersInDeskShell = OpenAllFoldersInDeskShell.IsChecked == true;
         _draft.Island.AppsButton = IslandAppsButton.IsChecked == true;
         _draft.Island.DiscordMessages = IslandDiscordMessages.IsChecked == true;
         _draft.QuitHotkey = Hotkey(QuitHotkey, "Quit");

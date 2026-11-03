@@ -43,6 +43,9 @@ internal sealed class AltTabHook : IDisposable
     /// <summary>Ctrl+Shift+Esc raises <see cref="TaskManagerKey"/> instead of opening Windows' Task Manager.</summary>
     public volatile bool CatchTaskManagerKey;
     bool _escCaught;
+    /// <summary>Win+E raises <see cref="ExplorerKey"/> instead of opening Windows' File Explorer.</summary>
+    public volatile bool CatchExplorerKey;
+    bool _eCaught;
     long _heartbeat = Environment.TickCount64;
 
     public event Action<int>? Opened;
@@ -51,6 +54,7 @@ internal sealed class AltTabHook : IDisposable
     public event Action? Cancelled;
     public event Action? WinTapped;
     public event Action? TaskManagerKey;
+    public event Action? ExplorerKey;
 
     public AltTabHook(Dispatcher ui)
     {
@@ -111,6 +115,32 @@ internal sealed class AltTabHook : IDisposable
         var up = msg is WM_KEYUP or WM_SYSKEYUP;
 
         if (vk is VK_LWIN or VK_RWIN) return HandleWinKey(vk, down, up);
+
+        // Win+E. Left to Windows during games and if DeskShell's UI isn't responding.
+        if (vk == 0x45 /* E */)
+        {
+            if (up && _eCaught)
+            {
+                _eCaught = false;
+                return true;
+            }
+            if (down && CatchExplorerKey && !Suspended && !_alt && !_shift
+                && ((GetAsyncKeyState(VK_LWIN) | GetAsyncKeyState(VK_RWIN)) & 0x8000) != 0
+                && (GetAsyncKeyState(VK_CONTROL) & 0x8000) == 0
+                && Environment.TickCount64 - Interlocked.Read(ref _heartbeat) < 2000)
+            {
+                _winAlone = false;
+                if (!_eCaught)
+                {
+                    // Something must come between Win's press and release, or Windows opens Start.
+                    keybd_event(HelperKey, 0, 0, UIntPtr.Zero);
+                    keybd_event(HelperKey, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+                    _ui.BeginInvoke(() => ExplorerKey?.Invoke());
+                }
+                _eCaught = true;
+                return true;
+            }
+        }
         if (down) _winAlone = false; // Win+something: a shortcut, not a tap
 
         if (vk is VK_MENU or VK_LMENU or VK_RMENU)
@@ -362,6 +392,7 @@ internal sealed class AltTabController : IDisposable
 
         _hook.WinTapped += () => WinKeyTapped?.Invoke();
         _hook.TaskManagerKey += () => TaskManagerKey?.Invoke();
+        _hook.ExplorerKey += () => ExplorerKey?.Invoke();
         _heartbeat = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Normal, (_, _) => _hook.Beat(), Dispatcher.CurrentDispatcher);
         // Windows' own Alt+Tab while a game or video is in front.
         if (App.Fullscreen != null)
@@ -377,6 +408,11 @@ internal sealed class AltTabController : IDisposable
 
     /// <summary>Whether Ctrl+Shift+Esc raises <see cref="TaskManagerKey"/>.</summary>
     public bool CatchTaskManagerKey { set => _hook.CatchTaskManagerKey = value; }
+
+    /// <summary>Whether Win+E raises <see cref="ExplorerKey"/>.</summary>
+    public bool CatchExplorerKey { set => _hook.CatchExplorerKey = value; }
+
+    public event Action? ExplorerKey;
 
     public event Action? TaskManagerKey;
 

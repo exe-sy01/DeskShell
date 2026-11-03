@@ -40,6 +40,13 @@ public static class ToolsMenu
         Add("PowerShell (admin)", powerShell, admin: true);
 
         menu.Items.Add(new Separator());
+        var files = new MenuItem { Header = "File Explorer" };
+        files.Click += (_, _) =>
+        {
+            beforeRun?.Invoke();
+            App.Instance.OpenFolder(null);
+        };
+        menu.Items.Add(files);
         var taskManager = new MenuItem { Header = "Task Manager" };
         taskManager.Click += (_, _) =>
         {

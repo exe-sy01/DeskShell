@@ -134,6 +134,10 @@ public sealed class Settings
     public bool WinKeyOpensDrawer { get; set; } = true;
     /// <summary>Ctrl+Shift+Esc and the Tools menus open DeskShell's Task Manager instead of Windows'.</summary>
     public bool UseDeskShellTaskManager { get; set; } = true;
+    /// <summary>Win+E and DeskShell's folder links open DeskShell's file explorer instead of Windows'.</summary>
+    public bool UseDeskShellFiles { get; set; } = true;
+    /// <summary>Windows opens every folder (from the desktop, other apps…) in DeskShell's file explorer.</summary>
+    public bool OpenAllFoldersInDeskShell { get; set; }
     /// <summary>Apps opened from the drawer, most recent first.</summary>
     public List<string> RecentApps { get; set; } = new();
 

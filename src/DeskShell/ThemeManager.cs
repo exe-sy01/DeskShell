@@ -51,6 +51,9 @@ public static class ThemeManager
         ApplyPalette(resources, Dark, DarkAccent());
     }
 
+    /// <summary>A closed window's resources no longer need updating (and shouldn't be kept alive).</summary>
+    public static void Release(ResourceDictionary resources) => _alwaysDark.Remove(resources);
+
     static Color DarkAccent()
     {
         try { return ToWpf((_ui ?? new UISettings()).GetColorValue(UIColorType.AccentLight2)); }

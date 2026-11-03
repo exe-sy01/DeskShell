@@ -6,6 +6,8 @@ namespace DeskShell;
 internal static class Log
 {
     static readonly object Gate = new();
+    /// <summary>Marks lines from the file explorer's process, which shares this log.</summary>
+    public static string Prefix = "";
     static readonly string FilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DeskShell", "deskshell.log");
 
@@ -23,7 +25,7 @@ internal static class Log
                 Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
                 var info = new FileInfo(FilePath);
                 if (info.Exists && info.Length > 1_000_000) info.Delete();
-                File.AppendAllText(FilePath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {level} {message}{Environment.NewLine}");
+                File.AppendAllText(FilePath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {level} {Prefix}{message}{Environment.NewLine}");
             }
         }
         catch

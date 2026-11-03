@@ -49,6 +49,11 @@
                 <CheckBox x:Name="WinKeyOpensDrawer" Style="{StaticResource Switch}" Content="Windows key opens the app drawer instead of the Start menu" Margin="0,0,0,10" />
                 <CheckBox x:Name="UseDeskShellTaskManager" Style="{StaticResource Switch}" Margin="0,0,0,10"
                           Content="Use DeskShell's Task Manager for Ctrl+Shift+Esc (off: Windows' Task Manager)" />
+                <CheckBox x:Name="UseDeskShellFiles" Style="{StaticResource Switch}" Margin="0,0,0,10"
+                          Content="Use DeskShell's file explorer for Win+E and DeskShell's folders (off: Windows' File Explorer)" />
+                <CheckBox x:Name="OpenAllFoldersInDeskShell" Style="{StaticResource Switch}" Margin="0,0,0,10"
+                          IsEnabled="{Binding IsChecked, ElementName=UseDeskShellFiles}"
+                          Content="Open every folder in DeskShell's file explorer, from the desktop and other apps too" />
                 <Grid Style="{StaticResource Row}">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="220" /><ColumnDefinition Width="220" /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource Label}" Text="Open the shell" />

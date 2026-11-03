@@ -145,9 +145,10 @@ public partial class App : Application
             Zones.OnMoveSizeEnd(hwnd);
             Dispatcher.BeginInvoke(() => _placer.Remember(hwnd), DispatcherPriority.Background);
         };
-        _altTab = new AltTabController(Shell, mru) { CatchWinKey = Settings.WinKeyOpensDrawer, CatchTaskManagerKey = Settings.UseDeskShellTaskManager };
+        _altTab = new AltTabController(Shell, mru) { CatchWinKey = Settings.WinKeyOpensDrawer, CatchTaskManagerKey = Settings.UseDeskShellTaskManager, CatchExplorerKey = Settings.UseDeskShellFiles };
         _altTab.WinKeyTapped += ToggleAppDrawer;
         _altTab.TaskManagerKey += OpenTaskManager;
+        _altTab.ExplorerKey += () => OpenFolder(null);
         _drawer = new AppDrawerWindow(apps);
         Overview = new OverviewWindow(Shell);
 
@@ -175,7 +176,15 @@ public partial class App : Application
 
         RegisterHotkeys();
         StartupRegistration.Apply(Settings.StartWithWindows);
+        ApplyFolderHandler();
         UpdateService.Start();
+        // The file explorer's process starts a little later, in the background, so its first window opens at once.
+        if (Settings.UseDeskShellFiles)
+            _ = Dispatcher.InvokeAsync(async () =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(20));
+                if (!_quitting && Settings.UseDeskShellFiles && !GameMode.Active) Files.FilesHost.Preload();
+            });
         TrimMemorySoon(TimeSpan.FromSeconds(15));
     }
 
@@ -241,8 +250,10 @@ public partial class App : Application
             _altTab.Enabled = Settings.CustomAltTab;
             _altTab.CatchWinKey = Settings.WinKeyOpensDrawer;
             _altTab.CatchTaskManagerKey = Settings.UseDeskShellTaskManager;
+            _altTab.CatchExplorerKey = Settings.UseDeskShellFiles;
         }
         StartupRegistration.Apply(Settings.StartWithWindows);
+        ApplyFolderHandler();
         _shellWindow?.UpdateHint();
         if (taskbarChanged) ApplyWindowsTaskbar();
         if (dockChanged) RebuildBars("settings changed");
@@ -475,6 +486,31 @@ public partial class App : Application
         WindowManagement.WmNative.Activate(new System.Windows.Interop.WindowInteropHelper(_taskManager).Handle);
     }
 
+    /// <summary>
+    /// Opens a folder (Home if null) in DeskShell's file explorer, or Windows' if the settings say so.
+    /// <paramref name="select"/> picks a file in it.
+    /// </summary>
+    public void OpenFolder(string? path, string? select = null)
+    {
+        HideShell();
+        _drawer?.CloseDrawer();
+        if (Settings.UseDeskShellFiles)
+        {
+            Files.FilesHost.Open(path, select, newWindow: path == null && select == null);
+            return;
+        }
+        var explorer = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+        ToolsMenu.Run(explorer, args: select != null ? $"/select,\"{select}\"" : path != null ? $"\"{path}\"" : null);
+    }
+
+    /// <summary>Windows sends every folder to DeskShell's explorer only while both settings are on.</summary>
+    void ApplyFolderHandler()
+    {
+        var on = Settings.UseDeskShellFiles && Settings.OpenAllFoldersInDeskShell;
+        if (on == Files.FolderHandler.IsOurs()) return;
+        Files.FolderHandler.Apply(on, Installer.IsInstalledCopy || !Installer.IsInstalled ? Environment.ProcessPath! : Installer.InstalledExe);
+    }
+
     public static void OpenWindowsTaskManager() => ToolsMenu.Run(System.IO.Path.Combine(Environment.SystemDirectory, "taskmgr.exe"));
 
     public void ToggleAppDrawer()
@@ -521,6 +557,15 @@ public partial class App : Application
         if (_quitting) return;
         _quitting = true;
         Log.Info("Quitting DeskShell");
+        // If something hangs while shutting down, leave anyway (with the taskbar back) rather than linger half-closed.
+        new Thread(() =>
+        {
+            Thread.Sleep(8000);
+            Log.Error("Quitting took too long; exiting");
+            TaskbarGuard.Restore();
+            Environment.Exit(0);
+        }) { IsBackground = true, Name = "DeskShell quit timeout" }.Start();
+        _taskManager?.Close();
 
         try
         {

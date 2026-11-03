@@ -1,0 +1,631 @@
+<Window x:Class="DeskShell.Files.FilesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:f="clr-namespace:DeskShell.Files"
+        Title="Files" Width="1100" Height="700" MinWidth="560" MinHeight="360"
+        Background="{DynamicResource IslandBrush}" Foreground="{DynamicResource TextBrush}" FontFamily="{StaticResource UiFont}" FontSize="13"
+        UseLayoutRounding="True" PreviewKeyDown="Window_PreviewKeyDown" PreviewMouseDown="Window_PreviewMouseDown">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="40" ResizeBorderThickness="6" GlassFrameThickness="0,0,0,1" CornerRadius="0" UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <Style x:Key="Caption" TargetType="Button" BasedOn="{StaticResource GhostButton}">
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileHoverBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CloseCaption" TargetType="Button" BasedOn="{StaticResource Caption}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#C42B1C" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Toolbar icon button with an optional label -->
+        <Style x:Key="Tool" TargetType="Button" BasedOn="{StaticResource GhostButton}">
+            <Setter Property="Width" Value="NaN" />
+            <Setter Property="MinWidth" Value="34" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Margin" Value="0,0,2,0" />
+        </Style>
+        <Style x:Key="ToolText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Margin" Value="0,0,10,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="ToolIcon" TargetType="TextBlock" BasedOn="{StaticResource Icon}">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Margin" Value="9,0" />
+        </Style>
+
+        <Style x:Key="ColumnHeader" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource TextDimBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="Transparent" CornerRadius="4" Padding="10,5">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" TextElement.FontSize="12" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- A file in the details list -->
+        <Style x:Key="Row" TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Grid>
+                            <Border x:Name="Bg" Background="Transparent" CornerRadius="5" Margin="0,1" BorderThickness="1" BorderBrush="Transparent">
+                                <ContentPresenter />
+                            </Border>
+                            <Border x:Name="Pill" Width="3" Height="16" CornerRadius="1.5" HorizontalAlignment="Left"
+                                    Background="{DynamicResource AccentBrush}" Visibility="Collapsed" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileHoverBrush}" />
+                                <Setter TargetName="Pill" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource EdgeBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- A file in the tiles view -->
+        <Style x:Key="TileBox" TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bg" Background="Transparent" CornerRadius="8" Margin="3" BorderThickness="1" BorderBrush="Transparent">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileHoverBrush}" />
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="RenameBox" TargetType="TextBox" BasedOn="{StaticResource Field}">
+            <Setter Property="Height" Value="26" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+
+        <DataTemplate x:Key="DetailsRow" DataType="{x:Type f:FileItem}">
+            <Grid Height="30" Background="Transparent">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="{x:Static f:FilesWindow.ModifiedWidth}" />
+                    <ColumnDefinition Width="{x:Static f:FilesWindow.TypeWidth}" />
+                    <ColumnDefinition Width="{x:Static f:FilesWindow.SizeWidth}" />
+                </Grid.ColumnDefinitions>
+                <Grid Margin="12,0,8,0" Opacity="{Binding Faded}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Image Source="{Binding Icon}" Width="20" Height="20" Margin="0,0,10,0" RenderOptions.BitmapScalingMode="HighQuality" />
+                    <TextBlock Grid.Column="1" Text="{Binding DisplayName}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <TextBox Grid.Column="1" Style="{StaticResource RenameBox}" Visibility="{Binding RenameVisibility}" Margin="-8,0,0,0"
+                             IsVisibleChanged="RenameBox_IsVisibleChanged" PreviewKeyDown="RenameBox_PreviewKeyDown" LostKeyboardFocus="RenameBox_LostKeyboardFocus" />
+                </Grid>
+                <TextBlock Grid.Column="1" Text="{Binding ModifiedText}" Foreground="{DynamicResource TextDimBrush}" VerticalAlignment="Center" Margin="10,0" FontSize="12.5" />
+                <TextBlock Grid.Column="2" Text="{Binding TypeName}" Foreground="{DynamicResource TextDimBrush}" VerticalAlignment="Center" Margin="10,0" FontSize="12.5"
+                           TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Column="3" Text="{Binding SizeText}" Foreground="{DynamicResource TextDimBrush}" VerticalAlignment="Center" Margin="10,0,16,0" FontSize="12.5"
+                           HorizontalAlignment="Right" />
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="TileItem" DataType="{x:Type f:FileItem}">
+            <Grid Width="114" Height="134" Background="Transparent" ToolTip="{Binding Name}">
+                <Grid Height="84" VerticalAlignment="Top" Margin="10,10,10,0" Opacity="{Binding Faded}">
+                    <TextBlock x:Name="Placeholder" Style="{StaticResource Icon}" FontSize="40" Visibility="Collapsed" Foreground="{DynamicResource TextDimBrush}" Text="&#xE7C3;" />
+                    <Image x:Name="Thumb" Source="{Binding Thumbnail}" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Grid>
+                <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Top" Margin="6,98,6,0" TextAlignment="Center" FontSize="12"
+                           TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="32" />
+                <TextBox Style="{StaticResource RenameBox}" Visibility="{Binding RenameVisibility}" VerticalAlignment="Top" Margin="4,98,4,0"
+                         IsVisibleChanged="RenameBox_IsVisibleChanged" PreviewKeyDown="RenameBox_PreviewKeyDown" LostKeyboardFocus="RenameBox_LostKeyboardFocus" />
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsFolder}" Value="True">
+                    <Setter TargetName="Placeholder" Property="Text" Value="&#xE8B7;" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Source, ElementName=Thumb}" Value="{x:Null}">
+                    <Setter TargetName="Placeholder" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <ItemsPanelTemplate x:Key="DetailsPanel">
+            <VirtualizingStackPanel />
+        </ItemsPanelTemplate>
+        <ItemsPanelTemplate x:Key="TilesPanel">
+            <f:TilePanel ItemWidth="120" ItemHeight="140" />
+        </ItemsPanelTemplate>
+
+        <!-- Sidebar entries -->
+        <Style x:Key="SideRow" TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="AllowDrop" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Grid>
+                            <Border x:Name="Bg" Background="Transparent" CornerRadius="5" Margin="0,1">
+                                <ContentPresenter />
+                            </Border>
+                            <Border x:Name="Pill" Width="3" Height="16" CornerRadius="1.5" HorizontalAlignment="Left"
+                                    Background="{DynamicResource AccentBrush}" Visibility="Collapsed" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileHoverBrush}" />
+                                <Setter TargetName="Pill" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <DataTrigger Binding="{Binding IsHeader}" Value="True">
+                                <Setter Property="IsHitTestVisible" Value="False" />
+                                <Setter Property="Focusable" Value="False" />
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HomeTile" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Margin" Value="0,0,10,10" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{DynamicResource TileBrush}" CornerRadius="8" Padding="14,10" BorderThickness="1" BorderBrush="{DynamicResource EdgeBrush}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TilePressedBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bg" Property="BorderBrush" Value="{DynamicResource TextBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="HomeHeading" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource DisplayFont}" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,18,0,10" />
+        </Style>
+    </Window.Resources>
+
+    <Grid x:Name="Root">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="40" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Tabs and window buttons -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" Margin="8,6,0,0">
+                <ItemsControl x:Name="TabStrip" WindowChrome.IsHitTestVisibleInChrome="True">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border x:Name="TabBg" Height="34" MinWidth="120" MaxWidth="{Binding MaxWidth}" CornerRadius="8,8,0,0" Padding="12,0,4,0" Margin="0,0,2,0"
+                                    Background="Transparent" Cursor="Hand" ToolTip="{Binding Location}" AllowDrop="True"
+                                    MouseLeftButtonDown="Tab_MouseLeftButtonDown" MouseUp="Tab_MouseUp" DragOver="Tab_DragOver">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource Icon}" Text="{Binding Glyph}" FontSize="13" Margin="0,0,8,0" Foreground="{DynamicResource TextDimBrush}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="12.5" />
+                                    <Button Grid.Column="2" Style="{StaticResource GhostButton}" Width="24" Height="24" Margin="6,0,0,0" Click="CloseTab_Click"
+                                            Focusable="False" ToolTip="Close tab (Ctrl+W)">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE711;" FontSize="10" />
+                                    </Button>
+                                </Grid>
+                            </Border>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                    <Setter TargetName="TabBg" Property="Background" Value="{DynamicResource TileHoverBrush}" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Style="{StaticResource GhostButton}" Width="32" Height="32" Margin="4,0,0,2" Click="NewTab_Click" ToolTip="New tab (Ctrl+T)"
+                        WindowChrome.IsHitTestVisibleInChrome="True">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE710;" FontSize="12" />
+                </Button>
+            </StackPanel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
+                <Button Style="{StaticResource Caption}" Click="Minimize_Click">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE921;" FontSize="10" />
+                </Button>
+                <Button Style="{StaticResource Caption}" Click="Maximize_Click">
+                    <TextBlock x:Name="MaximizeGlyph" Style="{StaticResource Icon}" Text="&#xE922;" FontSize="10" />
+                </Button>
+                <Button Style="{StaticResource CloseCaption}" Click="Close_Click">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE8BB;" FontSize="10" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- Navigation, address and search -->
+        <Border Grid.Row="1" Background="{DynamicResource TileHoverBrush}" Padding="8,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="BackButton" Style="{StaticResource GhostButton}" Width="34" Height="32" Click="Back_Click" ToolTip="Back (Alt+Left)">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE72B;" FontSize="14" />
+                    </Button>
+                    <Button x:Name="ForwardButton" Style="{StaticResource GhostButton}" Width="34" Height="32" Click="Forward_Click" ToolTip="Forward (Alt+Right)">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE72A;" FontSize="14" />
+                    </Button>
+                    <Button x:Name="UpButton" Style="{StaticResource GhostButton}" Width="34" Height="32" Click="Up_Click" ToolTip="Up (Alt+Up)">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE74A;" FontSize="14" />
+                    </Button>
+                    <Button Style="{StaticResource GhostButton}" Width="34" Height="32" Click="Refresh_Click" ToolTip="Refresh (F5)" Margin="0,0,8,0">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE72C;" FontSize="14" />
+                    </Button>
+                </StackPanel>
+
+                <Border x:Name="AddressBar" Grid.Column="1" Height="32" Background="{DynamicResource FieldBrush}" CornerRadius="4" BorderThickness="1"
+                        BorderBrush="{DynamicResource EdgeBrush}" MouseLeftButtonDown="AddressBar_MouseLeftButtonDown" Cursor="IBeam">
+                    <Grid>
+                        <ScrollViewer x:Name="CrumbScroller" Margin="4,0" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                                      Focusable="False" PreviewMouseWheel="CrumbScroller_PreviewMouseWheel">
+                            <StackPanel x:Name="Crumbs" Orientation="Horizontal" />
+                        </ScrollViewer>
+                        <TextBox x:Name="AddressBox" Visibility="Collapsed" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource TextBrush}"
+                                 CaretBrush="{DynamicResource TextBrush}" SelectionBrush="{DynamicResource AccentBrush}" VerticalContentAlignment="Center"
+                                 Padding="6,0" FontSize="13" PreviewKeyDown="AddressBox_PreviewKeyDown" LostKeyboardFocus="AddressBox_LostKeyboardFocus" />
+                    </Grid>
+                </Border>
+
+                <TextBox x:Name="SearchBox" Grid.Column="2" Style="{StaticResource SearchBox}" Tag="Search" Width="260" Height="32" FontSize="13"
+                         Margin="8,0,0,0" TextChanged="SearchBox_TextChanged" PreviewKeyDown="SearchBox_PreviewKeyDown" />
+            </Grid>
+        </Border>
+
+        <!-- Commands -->
+        <Border Grid.Row="2" Background="{DynamicResource TileHoverBrush}" Padding="8,0,8,6">
+            <StackPanel Orientation="Horizontal">
+                <Button Style="{StaticResource Tool}" Click="NewMenu_Click" ToolTip="New folder (Ctrl+Shift+N) or file">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource ToolIcon}" Text="&#xE710;" />
+                        <TextBlock Style="{StaticResource ToolText}" Text="New" />
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE70D;" FontSize="9" Margin="0,0,10,0" />
+                    </StackPanel>
+                </Button>
+                <Rectangle Width="1" Height="20" Fill="{DynamicResource EdgeBrush}" Margin="6,0" />
+                <Button x:Name="CutButton" Style="{StaticResource Tool}" Click="Cut_Click" ToolTip="Cut (Ctrl+X)">
+                    <TextBlock Style="{StaticResource ToolIcon}" Text="&#xE8C6;" />
+                </Button>
+                <Button x:Name="CopyButton" Style="{StaticResource Tool}" Click="Copy_Click" ToolTip="Copy (Ctrl+C)">
+                    <TextBlock Style="{StaticResource ToolIcon}" Text="&#xE8C8;" />
+                </Button>
+                <Button x:Name="PasteButton" Style="{StaticResource Tool}" Click="Paste_Click" ToolTip="Paste (Ctrl+V)">
+                    <TextBlock Style="{StaticResource ToolIcon}" Text="&#xE77F;" />
+                </Button>
+                <Button x:Name="RenameButton" Style="{StaticResource Tool}" Click="Rename_Click" ToolTip="Rename (F2)">
+                    <TextBlock Style="{StaticResource ToolIcon}" Text="&#xE8AC;" />
+                </Button>
+                <Button x:Name="DeleteButton" Style="{StaticResource Tool}" Click="Delete_Click" ToolTip="Delete (Del; Shift+Del deletes for good)">
+                    <TextBlock Style="{StaticResource ToolIcon}" Text="&#xE74D;" />
+                </Button>
+                <Rectangle Width="1" Height="20" Fill="{DynamicResource EdgeBrush}" Margin="6,0" />
+                <Button Style="{StaticResource Tool}" Click="SortMenu_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource ToolIcon}" Text="&#xE8CB;" />
+                        <TextBlock Style="{StaticResource ToolText}" Text="Sort" />
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE70D;" FontSize="9" Margin="0,0,10,0" />
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource Tool}" Click="ViewMenu_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource ToolIcon}" Text="&#xE8FD;" />
+                        <TextBlock Style="{StaticResource ToolText}" Text="View" />
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE70D;" FontSize="9" Margin="0,0,10,0" />
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource Tool}" Click="MoreMenu_Click" ToolTip="More">
+                    <TextBlock Style="{StaticResource ToolIcon}" Text="&#xE712;" />
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!-- Sidebar and contents -->
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="SidebarColumn" Width="220" MinWidth="150" MaxWidth="420" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <ListBox x:Name="Sidebar" Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource SideRow}" Padding="6,8,4,8"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionMode="Single" PreviewMouseLeftButtonUp="Sidebar_PreviewMouseLeftButtonUp"
+                     MouseUp="Sidebar_MouseUp" ContextMenuOpening="Sidebar_ContextMenuOpening" Drop="Sidebar_Drop" DragOver="Sidebar_DragOver" KeyDown="Sidebar_KeyDown">
+                <ListBox.ContextMenu>
+                    <ContextMenu />
+                </ListBox.ContextMenu>
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type f:SideItem}">
+                        <Grid>
+                            <TextBlock Text="{Binding Name}" Visibility="{Binding HeaderVisibility}" Foreground="{DynamicResource TextDimBrush}" FontSize="11.5"
+                                       FontWeight="SemiBold" Margin="10,12,0,4" />
+                            <Grid Visibility="{Binding RowVisibility}" Margin="10,0,8,0" MinHeight="32">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Style="{StaticResource Icon}" Text="{Binding Glyph}" FontSize="15" Foreground="{Binding GlyphBrush}" Margin="0,0,12,0" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,5">
+                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                    <Grid Visibility="{Binding UsageVisibility}" Margin="0,4,0,1" Height="3">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="{Binding UsedStar}" />
+                                            <ColumnDefinition Width="{Binding FreeStar}" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.ColumnSpan="2" CornerRadius="1.5" Background="{DynamicResource EdgeBrush}" />
+                                        <Border CornerRadius="1.5" Background="{Binding UsageBrush}" />
+                                    </Grid>
+                                    <TextBlock Text="{Binding Detail}" Visibility="{Binding UsageVisibility}" Foreground="{DynamicResource TextDimBrush}" FontSize="11" />
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <GridSplitter Grid.Column="1" Width="4" Background="Transparent" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                          ResizeBehavior="PreviousAndNext" DragCompleted="Splitter_DragCompleted" Focusable="False" />
+
+            <Grid Grid.Column="2" Margin="0,4,8,0">
+                <!-- Home -->
+                <ScrollViewer x:Name="HomePage" VerticalScrollBarVisibility="Auto" Visibility="Collapsed" Padding="16,0,16,16" Focusable="False">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource HomeHeading}" Text="Pinned" Margin="0,8,0,10" />
+                        <ItemsControl x:Name="HomePins">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type f:SideItem}">
+                                    <Button Style="{StaticResource HomeTile}" Width="210" Click="HomeTile_Click" ToolTip="{Binding Path}" MouseUp="HomeTile_MouseUp">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource Icon}" Text="{Binding Glyph}" FontSize="24" Foreground="{Binding GlyphBrush}" Margin="0,0,14,0" />
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding Detail}" Foreground="{DynamicResource TextDimBrush}" FontSize="11.5" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Style="{StaticResource HomeHeading}" Text="Drives" />
+                        <ItemsControl x:Name="HomeDrives">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type f:SideItem}">
+                                    <Button Style="{StaticResource HomeTile}" Width="260" Click="HomeTile_Click" MouseUp="HomeTile_MouseUp">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Style="{StaticResource Icon}" Text="{Binding Glyph}" FontSize="26" Foreground="{Binding GlyphBrush}" Margin="0,0,14,0" />
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                <Grid Margin="0,6,0,4" Height="4">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="{Binding UsedStar}" />
+                                                        <ColumnDefinition Width="{Binding FreeStar}" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border Grid.ColumnSpan="2" CornerRadius="2" Background="{DynamicResource EdgeBrush}" />
+                                                    <Border CornerRadius="2" Background="{Binding UsageBrush}" />
+                                                </Grid>
+                                                <TextBlock Text="{Binding Detail}" Foreground="{DynamicResource TextDimBrush}" FontSize="11.5" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock x:Name="RecentHeading" Style="{StaticResource HomeHeading}" Text="Recent files" />
+                        <ItemsControl x:Name="HomeRecent">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type f:RecentItem}">
+                                    <Button Click="Recent_Click" Cursor="Hand" FocusVisualStyle="{x:Null}" ToolTip="{Binding Name}">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border x:Name="Bg" Background="Transparent" CornerRadius="5" Padding="10,0" Height="32">
+                                                    <ContentPresenter VerticalAlignment="Center" />
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileBrush}" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="160" />
+                                            </Grid.ColumnDefinitions>
+                                            <Image Source="{Binding Icon}" Width="20" Height="20" Margin="0,0,10,0" RenderOptions.BitmapScalingMode="HighQuality" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="{DynamicResource TextBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2" Text="{Binding When}" Foreground="{DynamicResource TextDimBrush}" FontSize="12.5" VerticalAlignment="Center" Margin="10,0" />
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- A folder -->
+                <Grid x:Name="FolderPage">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid x:Name="ColumnHeaders" Margin="0,0,14,2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="{x:Static f:FilesWindow.ModifiedWidth}" />
+                            <ColumnDefinition Width="{x:Static f:FilesWindow.TypeWidth}" />
+                            <ColumnDefinition Width="{x:Static f:FilesWindow.SizeWidth}" />
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="NameHeader" Style="{StaticResource ColumnHeader}" Tag="Name" Click="Header_Click" Margin="32,0,0,0" />
+                        <Button x:Name="ModifiedHeader" Grid.Column="1" Style="{StaticResource ColumnHeader}" Tag="Modified" Click="Header_Click" />
+                        <Button x:Name="TypeHeader" Grid.Column="2" Style="{StaticResource ColumnHeader}" Tag="Type" Click="Header_Click" />
+                        <Button x:Name="SizeHeader" Grid.Column="3" Style="{StaticResource ColumnHeader}" Tag="Size" Click="Header_Click" HorizontalContentAlignment="Right" />
+                    </Grid>
+                    <ListBox x:Name="List" Grid.Row="1" Background="Transparent" BorderThickness="0" SelectionMode="Extended" AllowDrop="True"
+                             ItemContainerStyle="{StaticResource Row}" ItemTemplate="{StaticResource DetailsRow}"
+                             VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="True"
+                             IsTextSearchEnabled="True" TextSearch.TextPath="Name"
+                             SelectionChanged="List_SelectionChanged" ContextMenuOpening="List_ContextMenuOpening"
+                             PreviewMouseLeftButtonDown="List_PreviewMouseLeftButtonDown" PreviewMouseMove="List_PreviewMouseMove"
+                             PreviewMouseLeftButtonUp="List_PreviewMouseLeftButtonUp" MouseUp="List_MouseUp"
+                             DragOver="List_DragOver" Drop="List_Drop" DragLeave="List_DragLeave">
+                        <ListBox.ContextMenu>
+                            <ContextMenu />
+                        </ListBox.ContextMenu>
+                    </ListBox>
+                    <Canvas Grid.Row="1" IsHitTestVisible="False" ClipToBounds="True">
+                        <Border x:Name="Band" BorderThickness="1" BorderBrush="{DynamicResource AccentBrush}" CornerRadius="2" Visibility="Collapsed">
+                            <Border.Background>
+                                <SolidColorBrush Color="{DynamicResource AccentColor}" Opacity="0.18" />
+                            </Border.Background>
+                        </Border>
+                    </Canvas>
+                    <StackPanel x:Name="EmptyNote" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed" IsHitTestVisible="False">
+                        <TextBlock x:Name="EmptyGlyph" Style="{StaticResource Icon}" Text="&#xE8B7;" FontSize="40" Foreground="{DynamicResource TextDimBrush}" Margin="0,0,0,12" />
+                        <TextBlock x:Name="EmptyText" Foreground="{DynamicResource TextDimBrush}" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <!-- Status -->
+        <Grid Grid.Row="4" Margin="16,4,10,6">
+            <TextBlock x:Name="Status" Foreground="{DynamicResource TextDimBrush}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,90,0" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <ToggleButton x:Name="DetailsToggle" Style="{StaticResource GhostButton}" Width="30" Height="26" Click="DetailsView_Click" ToolTip="Details (Ctrl+Shift+6)">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE8FD;" FontSize="13" />
+                </ToggleButton>
+                <ToggleButton x:Name="TilesToggle" Style="{StaticResource GhostButton}" Width="30" Height="26" Click="TilesView_Click" ToolTip="Tiles (Ctrl+Shift+2)">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xF0E2;" FontSize="13" />
+                </ToggleButton>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

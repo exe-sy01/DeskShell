@@ -403,8 +403,18 @@ public partial class AppDrawerWindow : Window
         catch (Exception ex) { Log.Error($"Could not open {target}", ex); }
     }
 
-    void Files_Click(object sender, RoutedEventArgs e) => OpenThing(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
-    void Documents_Click(object sender, RoutedEventArgs e) => OpenThing(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
+    void OpenFolder(string path)
+    {
+        CloseDrawer();
+        App.Instance.OpenFolder(path);
+    }
+
+    void Files_Click(object sender, RoutedEventArgs e)
+    {
+        CloseDrawer();
+        App.Instance.OpenFolder(null);
+    }
+    void Documents_Click(object sender, RoutedEventArgs e) => OpenFolder(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
     void WindowsSettings_Click(object sender, RoutedEventArgs e) => OpenThing("ms-settings:");
 
     void Tools_Click(object sender, RoutedEventArgs e)
@@ -418,7 +428,7 @@ public partial class AppDrawerWindow : Window
     {
         var id = new Guid("374DE290-123F-4565-9164-39C4925E467B"); // FOLDERID_Downloads
         var path = SHGetKnownFolderPath(ref id, 0, IntPtr.Zero, out var found) == 0 ? found : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
-        OpenThing(path);
+        OpenFolder(path);
     }
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]

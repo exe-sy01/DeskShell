@@ -88,6 +88,7 @@ public partial class TaskManagerWindow : Window
             _timer.Stop();
             _armTimer?.Stop();
             _sampler.Dispose();
+            ThemeManager.Release(Resources);
         };
     }
 
@@ -639,7 +640,7 @@ public partial class TaskManagerWindow : Window
         {
             menu.Items.Add(new Separator());
             var path = row.Path;
-            Add("Open file location", () => ToolsMenu.Run(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"), args: $"/select,\"{path}\""));
+            Add("Open file location", () => App.Instance.OpenFolder(Path.GetDirectoryName(path), select: path));
             Add("Properties", () => SHObjectProperties(IntPtr.Zero, 2 /* SHOP_FILEPATH */, path, null));
         }
     }
