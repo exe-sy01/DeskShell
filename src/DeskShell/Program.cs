@@ -11,6 +11,11 @@ public static class Program
             TaskbarGuard.RunWatchdog(parentPid);
             return;
         }
+        if (args.Length == 2 && args[0] == "--restart" && int.TryParse(args[1], out var oldPid))
+        {
+            Services.GraphicsResetWatcher.RunReplacement(oldPid);
+            return;
+        }
         if (args.Length > 0 && args[0] is "--files" or "--open")
         {
             Files.FilesHost.Run(args);

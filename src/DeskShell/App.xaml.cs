@@ -121,6 +121,13 @@ public partial class App : Application
         apps.Start();
         DockPins.Start(Shell, apps);
         Fullscreen = new FullscreenWatcher();
+        // After a graphics driver reset WPF can leave the island and docks dead; start afresh instead.
+        GraphicsResetWatcher.Reset += () =>
+        {
+            GraphicsResetWatcher.StartReplacement();
+            Dispatcher.BeginInvoke(Quit);
+        };
+        GraphicsResetWatcher.Start();
         _ = Media.StartAsync();
         NotificationWatcher.Start();
         DiscordLink.Start();
