@@ -352,6 +352,7 @@ public sealed class NotchWindow : Window
         ToolsMenu.Fill(tools);
         menu.Items.Add(tools);
         menu.Items.Add(new Separator());
+        menu.Items.Add(Item("Windows Settings", () => ToolsMenu.WindowsSettings()));
         menu.Items.Add(Item("DeskShell settings", () => App.Instance.ShowSettings()));
         menu.Opened += (_, _) => _menuOpen = true;
         menu.Closed += (_, _) => _menuOpen = false;
@@ -486,6 +487,7 @@ public sealed class NotchWindow : Window
             Children =
             {
                 colours,
+                HeaderButton("", "Windows Settings", () => { Collapse(); ToolsMenu.WindowsSettings(); }),
                 HeaderButton("", "DeskShell settings", () => { Collapse(); App.Instance.ShowSettings(); }),
                 HeaderButton("", "Close", () => Collapse())
             }

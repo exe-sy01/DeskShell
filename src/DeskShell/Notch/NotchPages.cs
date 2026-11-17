@@ -581,6 +581,7 @@ sealed class SystemPage(NotchContext c) : NotchPage(c)
         _uptime.Margin = new Thickness(18, 0, 18, 0);
         info.Children.Add(_uptime);
         info.Children.Add(UI.Pill("Task Manager", () => { Context.Collapse(); App.Instance.OpenTaskManager(); }, ""));
+        info.Children.Add(UI.Pill("Windows Settings", () => { Context.Collapse(); ToolsMenu.WindowsSettings(); }, ""));
         var page = new StackPanel();
         page.Children.Add(rings);
         page.Children.Add(info);

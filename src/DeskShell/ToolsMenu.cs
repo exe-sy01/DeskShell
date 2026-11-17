@@ -40,6 +40,9 @@ public static class ToolsMenu
         Add("PowerShell (admin)", powerShell, admin: true);
 
         menu.Items.Add(new Separator());
+        Add("Windows Settings", "ms-settings:");
+        Add("Notification settings", "ms-settings:notifications");
+        Add("Control Panel", System32("control.exe"));
         var files = new MenuItem { Header = "File Explorer" };
         files.Click += (_, _) =>
         {
@@ -62,6 +65,9 @@ public static class ToolsMenu
         Add("Registry Editor", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "regedit.exe"));
         Add("Run…", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"), args: "shell:::{2559a1f3-21d7-11d4-bdaf-00c04f60b9f0}");
     }
+
+    /// <summary>Windows' own Settings app, optionally at a page ("notifications", "display"…).</summary>
+    public static void WindowsSettings(string page = "") => Run("ms-settings:" + page);
 
     /// <summary>PowerShell 7 if it's installed, otherwise the one built into Windows.</summary>
     static string NewestPowerShell()
