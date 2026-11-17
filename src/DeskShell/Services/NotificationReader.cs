@@ -152,7 +152,8 @@ internal static class NotificationWatcher
 {
     static FileSystemWatcher? _watcher;
     static DispatcherTimer? _debounce;
-    static DateTime _newest = DateTime.MaxValue;
+    static DateTime _newest = DateTime.MinValue;
+    static bool _primed;
 
     public static event Action<ToastItem>? Arrived;
 
@@ -162,7 +163,7 @@ internal static class NotificationWatcher
     public static void Start()
     {
         if (_watcher != null || !Directory.Exists(NotificationReader.Source)) return;
-        _debounce = new DispatcherTimer(TimeSpan.FromMilliseconds(700), DispatcherPriority.Background, async (_, _) =>
+        _debounce = new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, async (_, _) =>
         {
             _debounce!.Stop();
             await CheckAsync();
@@ -176,23 +177,50 @@ internal static class NotificationWatcher
                 NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size,
                 EnableRaisingEvents = true
             };
-            _watcher.Changed += (_, _) => _debounce.Dispatcher.InvokeAsync(() =>
-            {
-                if (Paused) return;
-                _debounce.Stop();
-                _debounce.Start();
-            });
+            _watcher.Changed += (_, _) => _debounce.Dispatcher.InvokeAsync(Changed);
         }
         catch (Exception ex)
         {
             Log.Error("Can't watch for new notifications", ex);
         }
+
+        // Windows writes a new notification to the store at once but tells file watchers several
+        // seconds later; looking at the file's time and size each second (no reading) catches it at once.
+        var wal = Path.Combine(NotificationReader.Source, "wpndatabase.db-wal");
+        var last = (DateTime.MinValue, -1L);
+        _poll = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) =>
+        {
+            if (Paused) return;
+            try
+            {
+                var info = new FileInfo(wal);
+                var now = info.Exists ? (info.LastWriteTimeUtc, info.Length) : (DateTime.MinValue, -1L);
+                if (now == last) return;
+                var changed = last.Item2 != -1 || last.Item1 != DateTime.MinValue;
+                last = now;
+                if (changed) Changed();
+            }
+            catch
+            {
+                // the file is being replaced; look again next time
+            }
+        }, Dispatcher.CurrentDispatcher);
+    }
+
+    static DispatcherTimer? _poll;
+
+    static void Changed()
+    {
+        if (Paused || _debounce == null) return;
+        _debounce.Stop();
+        _debounce.Start();
     }
 
     public static void Stop()
     {
         _watcher?.Dispose();
         _watcher = null;
+        _poll?.Stop();
         _debounce?.Stop();
     }
 
@@ -200,8 +228,10 @@ internal static class NotificationWatcher
     {
         // A few, since entries without text are skipped
         var latest = (await NotificationReader.ReadAsync(5)).FirstOrDefault();
+        // The first look only learns what's already there (even if that's nothing), so it announces nothing.
+        var first = !_primed;
+        _primed = true;
         if (latest == null) return;
-        var first = _newest == DateTime.MaxValue;
         if (!first && latest.Arrived <= _newest) return;
         _newest = latest.Arrived;
         if (!first) Arrived?.Invoke(latest);
