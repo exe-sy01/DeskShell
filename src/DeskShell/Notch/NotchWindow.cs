@@ -61,7 +61,7 @@ public sealed class NotchWindow : Window
 
     public AppBarScreen Screen { get; }
 
-    public NotchWindow(AppBarScreen screen, MediaService media, ClipboardHistory clipboard, AppIndex apps)
+    public NotchWindow(ManagedShell.ShellManager shell, AppBarScreen screen, MediaService media, ClipboardHistory clipboard, AppIndex apps)
     {
         Screen = screen;
         _media = media;
@@ -81,6 +81,7 @@ public sealed class NotchWindow : Window
 
         _context = new NotchContext
         {
+            Shell = shell,
             Media = media,
             Clipboard = clipboard,
             Apps = apps,
@@ -138,6 +139,7 @@ public sealed class NotchWindow : Window
 
         _media.Changed += OnMediaChanged;
         FocusTimer.Changed += UpdateSide;
+        DiscordLink.CallChanged += OnCallChanged;
         if (App.Fullscreen != null) App.Fullscreen.Changed += UpdateVisibility;
 
         SourceInitialized += (_, _) => Native.MakeNonActivating(new WindowInteropHelper(this).Handle);
@@ -153,6 +155,8 @@ public sealed class NotchWindow : Window
         {
             _media.Changed -= OnMediaChanged;
             FocusTimer.Changed -= UpdateSide;
+            DiscordLink.CallChanged -= OnCallChanged;
+            _speakerHold?.Stop();
             if (App.Fullscreen != null) App.Fullscreen.Changed -= UpdateVisibility;
             _clockTimer.Stop();
             _tickTimer.Stop();
@@ -206,9 +210,11 @@ public sealed class NotchWindow : Window
         _small.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         _clock.Margin = new Thickness(15, 0, 0, 1);
         _side.Margin = new Thickness(0, 0, 14, 1);
-        Grid.SetColumn(_side, 1);
+        _speakers.Margin = new Thickness(0, 0, 10, 0);
+        var sideHost = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { _speakers, _side } };
+        Grid.SetColumn(sideHost, 1);
         _small.Children.Add(_clock);
-        _small.Children.Add(_side);
+        _small.Children.Add(sideHost);
         _small.IsHitTestVisible = false;
         _canvas.Children.Add(_small);
 
@@ -250,8 +256,56 @@ public sealed class NotchWindow : Window
         _clockTimer.Start();
     }
 
+    // In a call: who's talking (and who talked a moment ago, so faces don't flicker between words)
+    readonly StackPanel _speakers = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+    readonly Dictionary<string, long> _lastSpoke = new();
+    DispatcherTimer? _speakerHold;
+    const long SpeakerHoldMs = 1200;
+
+    static bool InCall => App.Settings.Island.ShowCalls && DiscordLink.Call != null;
+
+    void OnCallChanged()
+    {
+        // The Voice call tab comes and goes with the call.
+        var hasTab = _tabs.Children.OfType<Button>().Any(b => b.Content is Border { Tag: "call" });
+        if (hasTab != InCall)
+        {
+            BuildTabs();
+            if (!InCall && _page?.Id == "call") ShowTab("home");
+            else MarkTab();
+        }
+        if (IsVisible) UpdateSide();
+    }
+
     void UpdateSide()
     {
+        _speakers.Children.Clear();
+        if (InCall)
+        {
+            var call = DiscordLink.Call!;
+            var now = Environment.TickCount64;
+            foreach (var p in call.Peers.Where(p => p.Speaking)) _lastSpoke[p.Id] = now;
+            var talking = call.Peers.Where(p => p.Speaking || now - _lastSpoke.GetValueOrDefault(p.Id, long.MinValue / 2) < SpeakerHoldMs).ToList();
+            foreach (var peer in talking.Take(4))
+            {
+                var face = Avatars.Make(peer, 22, badge: false);
+                face.Margin = new Thickness(2, 0, 0, 0);
+                _speakers.Children.Add(face);
+            }
+            _side.FontFamily = talking.Count > 4 ? UI.Font : UI.Icons;
+            _side.FontSize = 12;
+            _side.Text = talking.Count > 4 ? $"+{talking.Count - 4}" : talking.Count == 0 ? "" : "";
+            _side.Foreground = Avatars.Talking;
+            _side.Margin = new Thickness(0, 0, talking.Count > 0 && talking.Count <= 4 ? 4 : 14, 1);
+            // Look again when someone's moment after talking runs out.
+            if (talking.Any(p => !p.Speaking))
+            {
+                _speakerHold ??= new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, (_, _) => { _speakerHold!.Stop(); UpdateSide(); }, Dispatcher);
+                _speakerHold.Start();
+            }
+            return;
+        }
+        _side.Margin = new Thickness(0, 0, 14, 1);
         if (FocusTimer.Running || FocusTimer.Current != FocusTimer.Phase.Ready)
         {
             _side.FontFamily = UI.Font;
@@ -343,8 +397,9 @@ public sealed class NotchWindow : Window
     void BuildTabs()
     {
         _tabs.Children.Clear();
-        var ids = _style.Tabs.Where(id => NotchPage.All.Any(t => t.Id == id)).ToList();
+        var ids = _style.Tabs.Where(id => id != "call" && NotchPage.All.Any(t => t.Id == id)).ToList();
         if (!ids.Contains("home")) ids.Insert(0, "home");
+        if (InCall) ids.Insert(1, "call"); // only while you're in a call
         foreach (var id in ids)
         {
             var (_, title, glyph) = NotchPage.All.First(t => t.Id == id);
@@ -365,7 +420,7 @@ public sealed class NotchWindow : Window
         ((Border)add.Content).Width = ((Border)add.Content).Height = 38;
         ((Border)add.Content).CornerRadius = new CornerRadius(19);
         var menu = new ContextMenu();
-        foreach (var (id, title, _) in NotchPage.All.Where(t => t.Id != "home"))
+        foreach (var (id, title, _) in NotchPage.All.Where(t => t.Id is not "home" and not "call"))
         {
             var item = new MenuItem { Header = title, IsCheckable = true, IsChecked = ids.Contains(id), StaysOpenOnClick = true };
             item.Click += (_, _) =>

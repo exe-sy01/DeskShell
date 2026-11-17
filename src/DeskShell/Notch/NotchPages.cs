@@ -10,6 +10,7 @@ namespace DeskShell.Notch;
 /// <summary>What the panel's pages need from DeskShell.</summary>
 sealed class NotchContext
 {
+    public required ManagedShell.ShellManager Shell { get; init; }
     public required MediaService Media { get; init; }
     public required ClipboardHistory Clipboard { get; init; }
     public required AppIndex Apps { get; init; }
@@ -47,13 +48,15 @@ abstract class NotchPage(NotchContext context)
 
     public static readonly (string Id, string Title, string Glyph)[] All =
     [
-        ("home", "Home", ""), ("system", "System", ""), ("clipboard", "Clipboard", ""), ("notes", "Notes", ""),
+        ("home", "Home", ""), ("call", "Voice call", ""), ("windows", "Windows", ""), ("system", "System", ""), ("clipboard", "Clipboard", ""), ("notes", "Notes", ""),
         ("focus", "Focus", ""), ("files", "Files", ""), ("apps", "Apps", ""), ("weather", "Weather", ""),
         ("media", "Music", ""), ("screentime", "Screen time", "")
     ];
 
     public static NotchPage Create(string id, NotchContext c) => id switch
     {
+        "call" => new CallPage(c),
+        "windows" => new WindowsPage(c),
         "system" => new SystemPage(c),
         "clipboard" => new ClipboardPage(c),
         "notes" => new NotesPage(c),
@@ -345,6 +348,204 @@ sealed class StatsHolder
 {
     static StatsService? _shared;
     public SystemStats Sample() => (_shared ??= new StatsService(withGpu: false)).Sample();
+}
+
+// ---------------------------------------------------------------- Voice call
+
+/// <summary>Discord profile pictures with a ring while they talk and a badge when muted.</summary>
+static class Avatars
+{
+    public static readonly Brush Talking = UI.Frozen(Color.FromRgb(0x3B, 0xD1, 0x6F));
+    static readonly Brush Muted = UI.Frozen(Color.FromRgb(0xE0, 0x3C, 0x3C));
+    static readonly Brush Blank = UI.Frozen(Color.FromRgb(0x2E, 0x2E, 0x2E));
+
+    public static Grid Make(VoicePeer peer, double size, bool badge = true)
+    {
+        var ring = Math.Max(2, size / 18);
+        var root = new Grid { Width = size, Height = size, ToolTip = peer.Name + (peer.Deafened ? " · deafened" : peer.Muted ? " · muted" : "") };
+        var image = DiscordLink.Avatar(peer.Avatar);
+        var inner = size - ring * 3;
+        root.Children.Add(new System.Windows.Shapes.Ellipse { Width = inner, Height = inner, Fill = image != null ? new ImageBrush(image) { Stretch = Stretch.UniformToFill } : Blank });
+        if (image == null && peer.Name.Length > 0)
+        {
+            var initial = UI.Label(peer.Name[..1].ToUpperInvariant(), size * 0.36, bold: true);
+            initial.HorizontalAlignment = HorizontalAlignment.Center;
+            root.Children.Add(initial);
+        }
+        if (peer.Speaking) root.Children.Add(new System.Windows.Shapes.Ellipse { Stroke = Talking, StrokeThickness = ring });
+        if (badge && (peer.Muted || peer.Deafened))
+        {
+            var b = size * 0.36;
+            root.Children.Add(new Border
+            {
+                Width = b, Height = b, CornerRadius = new CornerRadius(b / 2), Background = Muted, BorderBrush = Brushes.Black, BorderThickness = new Thickness(1.5),
+                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
+                Child = UI.Glyph(peer.Deafened ? "" : "", b * 0.5)
+            });
+        }
+        return root;
+    }
+}
+
+sealed class CallPage(NotchContext c) : NotchPage(c)
+{
+    public override string Id => "call";
+    public override string Title => "Voice call";
+    public override string Glyph => "";
+
+    readonly TextBlock _channel = UI.Label("", 18, bold: true, font: UI.Display);
+    readonly TextBlock _server = UI.Label("", 12.5, brush: UI.Dim);
+    readonly TextBlock _talking = UI.Label("", 12.5, brush: UI.Dim);
+    readonly WrapPanel _people = new();
+    bool _listening;
+
+    protected override UIElement Build()
+    {
+        var head = new DockPanel { Margin = new Thickness(4, 0, 4, 12) };
+        _talking.HorizontalAlignment = HorizontalAlignment.Right;
+        DockPanel.SetDock(_talking, Dock.Right);
+        head.Children.Add(_talking);
+        var names = new StackPanel { Orientation = Orientation.Horizontal };
+        names.Children.Add(UI.Glyph("", 16, Avatars.Talking));
+        _channel.Margin = new Thickness(10, 0, 10, 0);
+        names.Children.Add(_channel);
+        names.Children.Add(_server);
+        head.Children.Add(names);
+        var page = new DockPanel();
+        DockPanel.SetDock(head, Dock.Top);
+        page.Children.Add(head);
+        page.Children.Add(new ScrollViewer { Content = _people, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        return page;
+    }
+
+    public override void Refresh()
+    {
+        if (!_listening)
+        {
+            _listening = true;
+            DiscordLink.CallChanged += () => { if (_people.IsVisible) Refresh(); };
+        }
+        var call = DiscordLink.Call;
+        _people.Children.Clear();
+        if (call == null)
+        {
+            _channel.Text = "Not in a voice call";
+            _server.Text = _talking.Text = "";
+            _people.Children.Add(UI.Label("Join a call in Discord and the people in it show up here (needs the AIChat plugin).", 12.5, brush: UI.Dim));
+            return;
+        }
+        _channel.Text = call.Channel;
+        _server.Text = call.Server ?? "";
+        var talking = call.Peers.Where(p => p.Speaking).Select(p => p.Name).ToList();
+        _talking.Text = talking.Count == 0 ? $"{call.Peers.Count} in the call" : $"{string.Join(", ", talking.Take(3))} talking";
+        _talking.Foreground = talking.Count == 0 ? UI.Dim : Avatars.Talking;
+        foreach (var peer in call.Peers)
+        {
+            var name = UI.Label(peer.Name, 12, brush: peer.Speaking ? UI.Text : UI.Dim);
+            name.HorizontalAlignment = HorizontalAlignment.Center;
+            name.MaxWidth = 92;
+            name.Margin = new Thickness(0, 7, 0, 0);
+            var cell = new StackPanel { Width = 100, Margin = new Thickness(0, 0, 4, 12) };
+            var avatar = Avatars.Make(peer, 58);
+            avatar.HorizontalAlignment = HorizontalAlignment.Center;
+            cell.Children.Add(avatar);
+            cell.Children.Add(name);
+            _people.Children.Add(cell);
+        }
+    }
+}
+
+// ---------------------------------------------------------------- Windows
+
+sealed class WindowsPage(NotchContext c) : NotchPage(c)
+{
+    public override string Id => "windows";
+    public override string Title => "Windows";
+    public override string Glyph => "";
+
+    readonly WrapPanel _grid = new();
+    System.ComponentModel.ICollectionView? _windows;
+    string _shown = "";
+
+    protected override UIElement Build()
+    {
+        _windows = Context.Shell.Tasks.CreateGroupedWindowsCollection();
+        if (_windows != null) _windows.Filter = o => o is ManagedShell.WindowsTasks.ApplicationWindow { ShowInTaskbar: true };
+        return new ScrollViewer { Content = _grid, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+    }
+
+    public override void Refresh()
+    {
+        _shown = "";
+        Tick();
+    }
+
+    /// <summary>Rebuilds only when windows open, close, change title or state.</summary>
+    public override void Tick()
+    {
+        _windows?.Refresh();
+        var list = _windows?.OfType<ManagedShell.WindowsTasks.ApplicationWindow>().ToList() ?? new();
+        var signature = string.Join("|", list.Select(w => $"{w.Handle}:{w.Title}:{w.State}:{w.IsMinimized}"));
+        if (signature == _shown) return;
+        _shown = signature;
+        _grid.Children.Clear();
+        foreach (var window in list) _grid.Children.Add(Tile(window));
+        if (list.Count == 0) _grid.Children.Add(UI.Label("No open windows", 13, brush: UI.Dim));
+    }
+
+    Button Tile(ManagedShell.WindowsTasks.ApplicationWindow window)
+    {
+        var active = window.State == ManagedShell.WindowsTasks.ApplicationWindow.WindowState.Active;
+        var flashing = window.State == ManagedShell.WindowsTasks.ApplicationWindow.WindowState.Flashing;
+        var icon = new Image { Width = 28, Height = 28, Opacity = window.IsMinimized ? 0.5 : 1, VerticalAlignment = VerticalAlignment.Center };
+        // Windows' icons load in the background; follow the window's Icon as it arrives.
+        icon.SetBinding(Image.SourceProperty, new System.Windows.Data.Binding(nameof(window.Icon)) { Source = window });
+        var title = new TextBlock
+        {
+            Text = window.Title, Foreground = window.IsMinimized ? UI.Dim : UI.Text, FontFamily = UI.Font, FontSize = 12.5,
+            TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.CharacterEllipsis, MaxHeight = 34, VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(11, 0, 0, 0)
+        };
+        var row = new DockPanel();
+        DockPanel.SetDock(icon, Dock.Left);
+        row.Children.Add(icon);
+        row.Children.Add(title);
+        var card = new Border
+        {
+            Width = 228, Height = 62, Margin = new Thickness(0, 0, 9, 9), Padding = new Thickness(14, 8, 12, 8), CornerRadius = new CornerRadius(14),
+            Background = UI.Card, BorderThickness = new Thickness(active || flashing ? 1.5 : 1),
+            BorderBrush = active ? Context.Accent() : flashing ? UI.Frozen(Color.FromRgb(0xF7, 0xA3, 0x25)) : UI.CardEdge,
+            Child = row
+        };
+        var button = new Button { Content = card, Template = UI.Bare(), Cursor = Cursors.Hand, Focusable = false, ToolTip = window.Title };
+        System.Windows.Automation.AutomationProperties.SetName(button, window.Title);
+        button.MouseEnter += (_, _) => card.Background = UI.Raised;
+        button.MouseLeave += (_, _) => card.Background = UI.Card;
+        button.Click += (_, _) =>
+        {
+            Context.Collapse();
+            window.BringToFront();
+        };
+        button.MouseUp += (_, e) =>
+        {
+            if (e.ChangedButton != MouseButton.Middle) return;
+            window.Close(); // middle-click closes, like a browser tab
+            e.Handled = true;
+        };
+        var menu = new ContextMenu();
+        void Add(string header, Action run)
+        {
+            var item = new MenuItem { Header = header };
+            item.Click += (_, _) => run();
+            menu.Items.Add(item);
+        }
+        Add("Bring to front", () => { Context.Collapse(); window.BringToFront(); });
+        if (window.CanMinimize) Add("Minimise", window.Minimize);
+        Add("Pin", () => DockPins.PinWindow(window));
+        Add("Close window", window.Close);
+        button.ContextMenu = menu;
+        return button;
+    }
 }
 
 // ---------------------------------------------------------------- System

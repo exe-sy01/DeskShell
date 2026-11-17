@@ -136,7 +136,7 @@ public sealed class NotchStyle
     public int HoverDelay { get; set; } = 250;
     public bool Seconds { get; set; }
     /// <summary>Tabs in the bar, in order.</summary>
-    public List<string> Tabs { get; set; } = ["home", "system", "clipboard", "notes", "focus", "files", "apps", "weather", "media", "screentime"];
+    public List<string> Tabs { get; set; } = ["home", "windows", "system", "clipboard", "notes", "focus", "files", "apps", "weather", "media", "screentime"];
     public int FocusMinutes { get; set; } = 25;
     public int BreakMinutes { get; set; } = 5;
 }
@@ -298,6 +298,12 @@ public sealed class Settings
         {
             Migrations.Add("notch");
             IslandLook = "notch";
+        }
+        // The notch's Windows tab came later: put it next to Home.
+        if (!Migrations.Contains("notch-windows"))
+        {
+            Migrations.Add("notch-windows");
+            if (!Notch.Tabs.Contains("windows")) Notch.Tabs.Insert(Math.Min(1, Notch.Tabs.Count), "windows");
         }
     }
 

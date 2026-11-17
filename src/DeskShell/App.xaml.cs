@@ -345,7 +345,7 @@ public partial class App : Application
         {
             if (Settings.UseNotch)
             {
-                var notch = new Notch.NotchWindow(screen, Media, _clipboard!, _apps!);
+                var notch = new Notch.NotchWindow(Shell, screen, Media, _clipboard!, _apps!);
                 notch.Show();
                 _notches.Add(notch);
                 continue;
