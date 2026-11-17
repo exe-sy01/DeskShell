@@ -23,6 +23,7 @@ public sealed class NotchWindow : Window
     // Sizes in device-independent pixels. The body's width doesn't include the two flares (Ear).
     const double SmallW = 186, SmallH = 34, SmallR = 13;
     const double BigW = 760, BigH = 382, BigR = 28;
+    const double PopW = 400, PopH = 70, PopR = 24;
     const double Ear = 11;
     /// <summary>Room around the shape for the glow.</summary>
     const double Room = 16;
@@ -32,6 +33,123 @@ public sealed class NotchWindow : Window
 
     /// <summary>0 = the small notch, 1 = the open panel.</summary>
     public double Progress { get => (double)GetValue(ProgressProperty); set => SetValue(ProgressProperty, value); }
+
+    public static readonly DependencyProperty PopProgressProperty = DependencyProperty.Register(nameof(PopProgress), typeof(double), typeof(NotchWindow),
+        new PropertyMetadata(0.0, (d, _) => ((NotchWindow)d).Layout()));
+
+    /// <summary>0 = the small notch, 1 = grown wide for a notification.</summary>
+    public double PopProgress { get => (double)GetValue(PopProgressProperty); set => SetValue(PopProgressProperty, value); }
+
+    // ---------- notification pop-ups ----------
+
+    readonly Grid _pop = new() { IsHitTestVisible = false };
+    readonly Image _popIcon = new() { Width = 36, Height = 36, VerticalAlignment = VerticalAlignment.Center };
+    readonly TextBlock _popBell = UI.Glyph("", 18, UI.Dim);
+    readonly TextBlock _popTitle = UI.Label("", 13.5, bold: true);
+    readonly TextBlock _popBody = new() { FontSize = 12, Foreground = UI.Dim, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.Wrap, MaxHeight = 32 };
+    DispatcherTimer? _popTimer;
+    Action? _popClick;
+    bool _inPop;
+    /// <summary>How many notches are on screen.</summary>
+    static int _open;
+
+    void BuildPop()
+    {
+        _pop.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
+        _pop.ColumnDefinitions.Add(new ColumnDefinition());
+        _pop.Margin = new Thickness(0);
+        var icon = new Grid { Margin = new Thickness(16, 0, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, Children = { _popBell, _popIcon } };
+        var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 18, 2) };
+        _popBody.FontFamily = UI.Font;
+        words.Children.Add(_popTitle);
+        words.Children.Add(_popBody);
+        Grid.SetColumn(words, 1);
+        _pop.Children.Add(icon);
+        _pop.Children.Add(words);
+        _pop.Opacity = 0;
+        _canvas.Children.Add(_pop);
+
+        NotificationWatcher.Arrived += OnToast;
+        DiscordLink.MessageArrived += OnDiscordMessage;
+        _open++;
+        Closed += (_, _) =>
+        {
+            _open--;
+            NotificationWatcher.Arrived -= OnToast;
+            DiscordLink.MessageArrived -= OnDiscordMessage;
+            _popTimer?.Stop();
+        };
+    }
+
+    void OnToast(ToastItem item) => Dispatcher.BeginInvoke(() =>
+    {
+        var app = _context.Apps.Find(item.AppId);
+        ShowPop(app?.Icon, false, app != null ? $"{app.Name} · {item.Title}" : item.Title, item.Body, ManagedShell.Common.Helpers.ShellHelper.ShowNotificationCenter);
+    });
+
+    /// <summary>Discord DMs and mentions (from the AIChat plugin); ones Discord marks quiet only go to the list.</summary>
+    void OnDiscordMessage(DiscordMessage message) => Dispatcher.BeginInvoke(() =>
+    {
+        if (!App.Settings.Island.DiscordMessages || message.Quiet) return;
+        ShowPop(DiscordLink.Avatar(message.Avatar), true, message.Title, message.Text, () => DiscordLink.Open(message));
+    });
+
+    /// <summary>Grows the notch wide to show a notification for a few seconds. Resting the mouse on it keeps it; clicking opens it.</summary>
+    void ShowPop(ImageSource? icon, bool round, string title, string body, Action click)
+    {
+        // Not over a game or with Do Not Disturb on, and not while Home is open.
+        if (!_style.Popups || !IsVisible || _expanded || GameMode.Active || DoNotDisturb.IsOn) return;
+        // With a notch on every screen, only the one where you are pops up.
+        if (_open > 1 && WindowManagement.ZoneManager.ScreenAtCursor().HMonitor != Screen.HMonitor) return;
+        _popIcon.Source = icon;
+        _popIcon.Clip = round ? new EllipseGeometry(new Point(18, 18), 18, 18) : null;
+        _popIcon.Visibility = icon != null ? Visibility.Visible : Visibility.Collapsed;
+        _popBell.Visibility = icon == null ? Visibility.Visible : Visibility.Collapsed;
+        _popTitle.Text = title.ReplaceLineEndings(" ");
+        _popBody.Text = body.ReplaceLineEndings(" ");
+        _popBody.Visibility = body.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        _popClick = click;
+
+        if (!_inPop)
+        {
+            _inPop = true;
+            StopBreathing();
+            SetSize(false);
+            BeginAnimation(PopProgressProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(360))
+            {
+                EasingFunction = new BackEase { Amplitude = 0.3, EasingMode = EasingMode.EaseOut }
+            });
+        }
+        _popTimer ??= new DispatcherTimer(DispatcherPriority.Normal, Dispatcher);
+        _popTimer.Tick -= PopTimeUp;
+        _popTimer.Tick += PopTimeUp;
+        _popTimer.Stop();
+        _popTimer.Interval = TimeSpan.FromSeconds(Math.Clamp(_style.PopupSeconds, 2, 30));
+        if (!IsMouseOver) _popTimer.Start();
+    }
+
+    void PopTimeUp(object? sender, EventArgs e) => EndPop();
+
+    void EndPop(bool animate = true)
+    {
+        _popTimer?.Stop();
+        if (!_inPop) return;
+        _inPop = false;
+        if (!animate)
+        {
+            BeginAnimation(PopProgressProperty, null);
+            PopProgress = 0;
+            return;
+        }
+        var shrink = new DoubleAnimation(0, TimeSpan.FromMilliseconds(260)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } };
+        shrink.Completed += (_, _) =>
+        {
+            if (_inPop || _expanded) return;
+            SetSize(false);
+            StartBreathing();
+        };
+        BeginAnimation(PopProgressProperty, shrink);
+    }
 
     readonly NotchStyle _style = App.Settings.Notch;
     readonly Canvas _canvas = new() { ClipToBounds = false };
@@ -101,6 +219,7 @@ public sealed class NotchWindow : Window
         _breathTimer.Stop();
         BuildShape();
         BuildSmall();
+        BuildPop();
         BuildPanel();
         Content = _canvas;
 
@@ -116,11 +235,18 @@ public sealed class NotchWindow : Window
         MouseEnter += (_, _) =>
         {
             _leaveTimer.Stop();
-            if (!_expanded) _hoverTimer.Start();
+            // Over a notification: keep it up (click opens it) instead of opening Home.
+            if (_inPop) _popTimer?.Stop();
+            else if (!_expanded) _hoverTimer.Start();
         };
         MouseLeave += (_, _) =>
         {
             _hoverTimer.Stop();
+            if (_inPop && _popTimer != null)
+            {
+                _popTimer.Interval = TimeSpan.FromSeconds(2);
+                _popTimer.Start();
+            }
             if (_expanded && !KeepOpen) _leaveTimer.Start();
         };
         Deactivated += (_, _) =>
@@ -181,7 +307,7 @@ public sealed class NotchWindow : Window
     /// <summary>Shows the glow over the small notch, breathing if chosen.</summary>
     void StartBreathing()
     {
-        if (!_style.Glow || _expanded || !IsVisible)
+        if (!_style.Glow || _expanded || _inPop || !IsVisible)
         {
             StopBreathing();
             return;
@@ -234,6 +360,13 @@ public sealed class NotchWindow : Window
         {
             if (_expanded) return;
             _hoverTimer.Stop();
+            if (_inPop)
+            {
+                var open = _popClick;
+                EndPop();
+                open?.Invoke();
+                return;
+            }
             Expand();
         };
     }
@@ -523,7 +656,15 @@ public sealed class NotchWindow : Window
             if (!_expanded) StartBreathing(); // shows the change once the panel closes otherwise
             ((TextBlock)((StackPanel)((Border)breathing.Content).Child).Children[^1]).Text = BreathingText();
         };
-        stack.Children.Add(breathing);
+        var popups = UI.Pill(PopupsText(), () => { });
+        popups.Margin = new Thickness(8, 12, 0, 0);
+        popups.Click += (_, _) =>
+        {
+            _style.Popups = !_style.Popups;
+            App.Settings.Save();
+            ((TextBlock)((StackPanel)((Border)popups.Content).Child).Children[^1]).Text = PopupsText();
+        };
+        stack.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Children = { breathing, popups } });
 
         return new Border
         {
@@ -538,6 +679,7 @@ public sealed class NotchWindow : Window
     }
 
     string BreathingText() => _style.Breathing ? "Breathing: on" : "Breathing: off";
+    string PopupsText() => _style.Popups ? "Pop-ups: on" : "Pop-ups: off";
 
     void ApplyGlowColour() => _glowWin.SetColour(UI.Parse(_style.GlowColor, Color.FromRgb(0xE0, 0x40, 0xFB)));
 
@@ -560,6 +702,13 @@ public sealed class NotchWindow : Window
         if (_expanded || !IsVisible) return;
         _expanded = true;
         _leaveTimer.Stop();
+        if (_inPop)
+        {
+            // Grow straight from the notification into Home.
+            _popTimer?.Stop();
+            _inPop = false;
+            BeginAnimation(PopProgressProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(380)));
+        }
         StopBreathing();
         SetSize(true);
         _panel.Visibility = Visibility.Visible;
@@ -606,10 +755,11 @@ public sealed class NotchWindow : Window
         WindowManagement.WmNative.Activate(new WindowInteropHelper(this).Handle);
     }
 
+    /// <summary>Sizes the window for the open panel (big), a notification, or the small notch.</summary>
     void SetSize(bool big)
     {
-        _winW = (big ? BigW : SmallW) + 2 * Ear + 2 * Room;
-        _winH = (big ? BigH : SmallH) + Room;
+        _winW = (big ? BigW : _inPop ? PopW : SmallW) + 2 * Ear + 2 * Room;
+        _winH = (big ? BigH : _inPop ? PopH : SmallH) + Room;
         Width = _winW;
         Height = _winH;
         _canvas.Width = _winW;
@@ -648,17 +798,28 @@ public sealed class NotchWindow : Window
     {
         if (_winW <= 0) return;
         var p = Progress;
-        var w = SmallW + (BigW - SmallW) * p;
-        var h = SmallH + (BigH - SmallH) * p;
-        var r = SmallR + (BigR - SmallR) * Math.Clamp(p, 0, 1);
+        var m = PopProgress;
+        // Small → (a notification's size) → the open panel
+        var w0 = SmallW + (PopW - SmallW) * m;
+        var h0 = SmallH + (PopH - SmallH) * m;
+        var r0 = SmallR + (PopR - SmallR) * Math.Clamp(m, 0, 1);
+        var w = w0 + (BigW - w0) * p;
+        var h = h0 + (BigH - h0) * p;
+        var r = r0 + (BigR - r0) * Math.Clamp(p, 0, 1);
         var left = (_winW - (w + 2 * Ear)) / 2;
 
         _body.Data = NotchShape.Fill(left, w, h, Ear, r);
-        if (p <= 0.0001 && !_expanded) _glowWin.SetEdge(NotchShape.Edge(left, w, h, Ear, r));
+        if (p <= 0.0001 && m <= 0.0001 && !_expanded) _glowWin.SetEdge(NotchShape.Edge(left, w, h, Ear, r));
 
         Canvas.SetLeft(_small, left + Ear);
         _small.Width = w;
-        _small.Opacity = Math.Clamp(1 - p * 4, 0, 1);
+        _small.Opacity = Math.Clamp(1 - p * 4, 0, 1) * Math.Clamp(1 - m * 3, 0, 1);
+
+        Canvas.SetLeft(_pop, left + Ear);
+        _pop.Width = w;
+        _pop.Height = h;
+        _pop.Opacity = Math.Clamp((m - 0.45) / 0.45, 0, 1) * Math.Clamp(1 - p * 4, 0, 1);
+        _pop.Clip = new RectangleGeometry(new Rect(0, 0, w, h));
 
         var panelLeft = (_winW - BigW) / 2;
         Canvas.SetLeft(_panel, panelLeft);
@@ -674,6 +835,7 @@ public sealed class NotchWindow : Window
         Visibility = covered ? Visibility.Hidden : Visibility.Visible;
         if (covered)
         {
+            EndPop(animate: false);
             Collapse(giveFocusBack: false);
             StopBreathing();
         }

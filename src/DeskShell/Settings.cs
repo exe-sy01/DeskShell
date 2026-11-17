@@ -137,6 +137,9 @@ public sealed class NotchStyle
     public bool Seconds { get; set; }
     /// <summary>Tabs in the bar, in order.</summary>
     public List<string> Tabs { get; set; } = ["home", "windows", "system", "clipboard", "notes", "focus", "files", "apps", "weather", "media", "screentime"];
+    /// <summary>New notifications (and Discord DMs and mentions) pop out of the notch for a few seconds.</summary>
+    public bool Popups { get; set; } = true;
+    public double PopupSeconds { get; set; } = 6;
     public int FocusMinutes { get; set; } = 25;
     public int BreakMinutes { get; set; } = 5;
 }
