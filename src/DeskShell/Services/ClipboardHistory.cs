@@ -20,6 +20,9 @@ public sealed class ClipboardHistory : IDisposable
 
     public ObservableCollection<string> Items { get; } = new();
 
+    /// <summary>When the newest item was copied.</summary>
+    public DateTime LastCopied { get; private set; } = DateTime.Now;
+
     public ClipboardHistory()
     {
         _source = new HwndSource(new HwndSourceParameters("DeskShellClipboard") { Width = 0, Height = 0, WindowStyle = 0 });
@@ -53,6 +56,7 @@ public sealed class ClipboardHistory : IDisposable
                     return;
                 }
 
+                LastCopied = DateTime.Now;
                 Items.Remove(text);
                 Items.Insert(0, text);
                 while (Items.Count > Max) Items.RemoveAt(Items.Count - 1);

@@ -95,6 +95,8 @@
                 <TextBlock Style="{StaticResource Section}" Text="Island" />
                 <TextBlock Style="{StaticResource Note}" Text="The pill at the top of the screen. ‹ › or the mouse wheel flip between notifications, music, open windows and pinned programs; double-click it to open the shell." />
                 <CheckBox x:Name="ShowIsland" Style="{StaticResource Switch}" Margin="0,4,0,8" Content="Show the island" />
+                <CheckBox x:Name="UseNotch" Style="{StaticResource Switch}" Margin="0,4,0,8" IsEnabled="{Binding IsChecked, ElementName=ShowIsland}"
+                          Content="Notch look: a small clock that opens Home when you rest the mouse on it (off: the classic pill with pages)" />
                 <CheckBox x:Name="IslandOnAllMonitors" Style="{StaticResource Switch}" Margin="0,4,0,8" IsEnabled="{Binding IsChecked, ElementName=ShowIsland}"
                           Content="An island on every monitor, each showing its own windows (off: main monitor only)" />
                 <CheckBox x:Name="IslandReserveSpace" Style="{StaticResource Switch}" Margin="0,4,0,8" IsEnabled="{Binding IsChecked, ElementName=ShowIsland}"

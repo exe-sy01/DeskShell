@@ -31,7 +31,9 @@ DeskShell doesn't include its own file manager; it's set up alongside [Files](ht
 
 ## What's in it
 
-**Island** (top of the main monitor): a black pill, like Apple's Dynamic Island, that never grows past its size. **‹ ›** or the mouse wheel flip between four pages:
+**Notch** (the island's default look): a small black clock against the top edge of the screen, its edges slowly breathing in a colour you pick. Rest the mouse on it (or press `Alt+Space`) and it grows into **Home**: cards for screen time today, CPU / memory / disk, weather, a focus timer, the clipboard and quick notes, with a tab bar for bigger views of each plus Files, Apps and Music. The palette button in its header picks the edge-glow and panel colours and turns breathing on or off; **+** on the tab bar chooses which tabs show. While a focus timer runs, the notch shows the time left. Screen time and notes stay on this PC (`%APPDATA%\DeskShell\screentime.json`, `notes.json`). Other programs can open Home by setting the `DeskShell.ToggleHome` event. Settings → Island switches back to the classic pill below.
+
+**Island, classic pill** (top of the main monitor): a black pill, like Apple's Dynamic Island, that never grows past its size. **‹ ›** or the mouse wheel flip between four pages:
 
 - **Notifications**: the latest one and how many there are, including unread Discord DMs and direct mentions (from the AIChat Vencord plugin). Click a Discord message to open it in Discord, anything else for Windows' notification centre
 - **Music**: what's playing, with previous / play-pause / next

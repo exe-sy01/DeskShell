@@ -42,6 +42,7 @@ public partial class SettingsWindow : Window
         GameModeOn.IsChecked = _draft.GameMode;
         GameModeDnd.IsChecked = _draft.GameModeDoNotDisturb;
         ShowIsland.IsChecked = _draft.ShowIsland;
+        UseNotch.IsChecked = _draft.UseNotch;
         IslandOnAllMonitors.IsChecked = _draft.IslandOnAllMonitors;
         IslandReserveSpace.IsChecked = _draft.IslandReserveSpace;
         ShowWindowsTaskbar.IsChecked = _draft.ShowWindowsTaskbar;
@@ -195,6 +196,7 @@ public partial class SettingsWindow : Window
         _draft.GameMode = GameModeOn.IsChecked == true;
         _draft.GameModeDoNotDisturb = GameModeDnd.IsChecked == true;
         _draft.ShowIsland = ShowIsland.IsChecked == true;
+        _draft.IslandLook = UseNotch.IsChecked == true ? "notch" : "pill";
         _draft.IslandOnAllMonitors = IslandOnAllMonitors.IsChecked == true;
         _draft.IslandReserveSpace = IslandReserveSpace.IsChecked == true;
         _draft.ShowWindowsTaskbar = ShowWindowsTaskbar.IsChecked == true;

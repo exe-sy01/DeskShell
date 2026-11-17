@@ -122,6 +122,25 @@ public sealed class IslandStyle
     [JsonIgnore] public double ReservedHeight => TopGap + Height + 6;
 }
 
+/// <summary>The notch: a small clock at the top edge that grows into the Home panel when you rest the mouse on it.</summary>
+public sealed class NotchStyle
+{
+    /// <summary>Colour that breathes along the notch's edges (#RRGGBB).</summary>
+    public string GlowColor { get; set; } = "#E040FB";
+    public bool Glow { get; set; } = true;
+    /// <summary>The glow slowly fades in and out (off: it stays lit).</summary>
+    public bool Breathing { get; set; } = true;
+    /// <summary>Colour of the gauges, bars and the timer in the panel.</summary>
+    public string PanelColor { get; set; } = "#FF6A1F";
+    /// <summary>How long the mouse rests on the notch before it opens, in milliseconds.</summary>
+    public int HoverDelay { get; set; } = 250;
+    public bool Seconds { get; set; }
+    /// <summary>Tabs in the bar, in order.</summary>
+    public List<string> Tabs { get; set; } = ["home", "system", "clipboard", "notes", "focus", "files", "apps", "weather", "media", "screentime"];
+    public int FocusMinutes { get; set; } = 25;
+    public int BreakMinutes { get; set; } = 5;
+}
+
 /// <summary>User settings, stored as editable JSON in %APPDATA%\DeskShell\settings.json.</summary>
 public sealed class Settings
 {
@@ -149,6 +168,11 @@ public sealed class Settings
     /// <summary>The island page last shown: music, notifications, windows or programs.</summary>
     public string IslandPage { get; set; } = "windows";
     public IslandStyle Island { get; set; } = new();
+    /// <summary>"notch" (a small clock that grows into the Home panel) or "pill" (the classic island with pages).</summary>
+    public string IslandLook { get; set; } = "notch";
+    public NotchStyle Notch { get; set; } = new();
+
+    [JsonIgnore] public bool UseNotch => IslandLook == "notch";
 
     /// <summary>Leave Windows' own taskbar on screen, with the tray icons, alongside the island.</summary>
     public bool ShowWindowsTaskbar { get; set; }
@@ -268,6 +292,12 @@ public sealed class Settings
             Migrations.Add("island");
             ShowDock = false;
             ShowIsland = true;
+        }
+        // The notch replaced the pill as the island's look (the pill stays in settings).
+        if (!Migrations.Contains("notch"))
+        {
+            Migrations.Add("notch");
+            IslandLook = "notch";
         }
     }
 

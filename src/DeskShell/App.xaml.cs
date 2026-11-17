@@ -22,6 +22,7 @@ public partial class App : Application
 
     readonly List<DockWindow> _docks = new();
     readonly List<IslandWindow> _islands = new();
+    readonly List<Notch.NotchWindow> _notches = new();
     AppIndex? _apps;
     AppDrawerWindow? _drawer;
     TaskManagerWindow? _taskManager;
@@ -58,6 +59,9 @@ public partial class App : Application
         }
         // The installer and updater ask a running DeskShell to quit before replacing its files.
         Installer.ListenForQuitRequests(() => Dispatcher.BeginInvoke(Quit));
+        // Other programs (a script, a Stream Deck button) can open Home by setting this event.
+        var home = new EventWaitHandle(false, EventResetMode.AutoReset, "DeskShell.ToggleHome");
+        ThreadPool.RegisterWaitForSingleObject(home, (_, _) => Dispatcher.BeginInvoke(ToggleHome), null, Timeout.Infinite, false);
 
         DispatcherUnhandledException += (_, ex) =>
         {
@@ -131,6 +135,8 @@ public partial class App : Application
         _ = Media.StartAsync();
         NotificationWatcher.Start();
         DiscordLink.Start();
+        _clipboard = new ClipboardHistory();
+        ScreenTime.Start();
         CreateBars();
         StartWatchingSystem();
 
@@ -160,7 +166,6 @@ public partial class App : Application
         Overview = new OverviewWindow(Shell);
 
         // The shell panel
-        _clipboard = new ClipboardHistory();
         _shellWindow = new ShellWindow(Shell, apps, _clipboard, Media);
 
         BadgeService.Instance.Start(Shell);
@@ -232,8 +237,8 @@ public partial class App : Application
     {
         _hotkeys?.Dispose();
         _hotkeys = new HotkeyManager();
-        if (!_hotkeys.Register(Settings.ShellHotkey, ToggleShell) && Settings.ShellHotkey != "Ctrl+Alt+Space")
-            _hotkeys.Register("Ctrl+Alt+Space", ToggleShell);
+        if (!_hotkeys.Register(Settings.ShellHotkey, ToggleHome) && Settings.ShellHotkey != "Ctrl+Alt+Space")
+            _hotkeys.Register("Ctrl+Alt+Space", ToggleHome);
         _hotkeys.Register(Settings.OverviewHotkey, () => Overview.Toggle());
         _hotkeys.Register(Settings.AppDrawerHotkey, ToggleAppDrawer);
         _hotkeys.Register(Settings.QuitHotkey, Quit);
@@ -244,7 +249,8 @@ public partial class App : Application
     {
         var taskbarChanged = updated.ShowWindowsTaskbar != Settings.ShowWindowsTaskbar;
         var dockChanged = updated.ShowIsland != Settings.ShowIsland || updated.IslandOnAllMonitors != Settings.IslandOnAllMonitors ||
-                          updated.IslandReserveSpace != Settings.IslandReserveSpace ||
+                          updated.IslandReserveSpace != Settings.IslandReserveSpace || updated.IslandLook != Settings.IslandLook ||
+                          System.Text.Json.JsonSerializer.Serialize(updated.Notch) != System.Text.Json.JsonSerializer.Serialize(Settings.Notch) ||
                           System.Text.Json.JsonSerializer.Serialize(updated.Island) != System.Text.Json.JsonSerializer.Serialize(Settings.Island) ||
                           updated.ShowDock != Settings.ShowDock || updated.DockOnAllMonitors != Settings.DockOnAllMonitors || Math.Abs(updated.DockHeight - Settings.DockHeight) > 0.5;
         if (!updated.ActiveWindowBorder) _border?.Reset();
@@ -337,6 +343,13 @@ public partial class App : Application
 
         foreach (var screen in islandScreens)
         {
+            if (Settings.UseNotch)
+            {
+                var notch = new Notch.NotchWindow(screen, Media, _clipboard!, _apps!);
+                notch.Show();
+                _notches.Add(notch);
+                continue;
+            }
             var island = new IslandWindow(Shell, screen, Media, _apps!);
             island.Show();
             _islands.Add(island);
@@ -372,7 +385,7 @@ public partial class App : Application
 
         // Every screen gets its usable area set, so the hidden taskbar's strip goes to windows even where there's no bar.
         _workArea?.Reserve(all.Select(screen => (screen,
-            Settings.IslandReserveSpace && islandScreens.Any(s => s.HMonitor == screen.HMonitor) ? Settings.Island.ReservedHeight : 0,
+            Settings.IslandReserveSpace && islandScreens.Any(s => s.HMonitor == screen.HMonitor) ? (Settings.UseNotch ? 36 : Settings.Island.ReservedHeight) : 0,
             BottomStrip(screen))));
     }
 
@@ -386,6 +399,8 @@ public partial class App : Application
         _docks.Clear();
         foreach (var island in _islands) island.ForceClose();
         _islands.Clear();
+        foreach (var notch in _notches) notch.ForceClose();
+        _notches.Clear();
     }
 
     /// <summary>
@@ -445,6 +460,18 @@ public partial class App : Application
                 if (Settings.ShowWindowsTaskbar) ReserveSpace(); // its new taskbar exists by now
             });
         };
+    }
+
+    /// <summary>The shell hotkey: with the notch, its Home panel on the screen you're on; otherwise the shell.</summary>
+    public void ToggleHome()
+    {
+        if (_notches.Count == 0)
+        {
+            ToggleShell();
+            return;
+        }
+        var screen = WindowManagement.ZoneManager.ScreenAtCursor();
+        (_notches.FirstOrDefault(n => n.Screen.HMonitor == screen.HMonitor) ?? _notches[0]).Toggle();
     }
 
     public void ToggleShell()
@@ -576,6 +603,7 @@ public partial class App : Application
 
         try
         {
+            ScreenTime.Save();
             _watcher?.Dispose();
             NotificationWatcher.Stop();
             DiscordLink.Stop();
