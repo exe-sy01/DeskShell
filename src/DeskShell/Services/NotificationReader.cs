@@ -87,6 +87,27 @@ internal static class NotificationReader
         return badges;
     });
 
+    /// <summary>Every app Windows has kept notifications for (their notification ids).</summary>
+    public static Task<List<string>> ReadAppIdsAsync() => Task.Run(() =>
+    {
+        var ids = new List<string>();
+        lock (Gate)
+        try
+        {
+            using var db = OpenCopy();
+            using var cmd = db.CreateCommand();
+            cmd.CommandText = "SELECT PrimaryId FROM NotificationHandler";
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                if (!reader.IsDBNull(0)) ids.Add(reader.GetString(0));
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Could not list notifying apps", ex);
+        }
+        return ids;
+    });
+
     public static Task<List<ToastItem>> ReadAsync(int max = 20) => Task.Run(() =>
     {
         var items = new List<ToastItem>();

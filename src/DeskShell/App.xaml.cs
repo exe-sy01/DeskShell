@@ -189,6 +189,12 @@ public partial class App : Application
         RegisterHotkeys();
         StartupRegistration.Apply(Settings.StartWithWindows);
         ApplyFolderHandler();
+        ApplyBanners();
+        NotificationWatcher.Arrived += toast =>
+        {
+            // An app notifying for the first time: its banners go off too.
+            if (WindowsBanners.Active) _ = WindowsBanners.HideAsync();
+        };
         UpdateService.Start();
         // The file explorer's process starts a little later, in the background, so its first window opens at once.
         if (Settings.UseDeskShellFiles)
@@ -267,6 +273,7 @@ public partial class App : Application
         }
         StartupRegistration.Apply(Settings.StartWithWindows);
         ApplyFolderHandler();
+        ApplyBanners();
         _shellWindow?.UpdateHint();
         if (taskbarChanged) ApplyWindowsTaskbar();
         if (dockChanged) RebuildBars("settings changed");
@@ -537,6 +544,14 @@ public partial class App : Application
         ToolsMenu.Run(explorer, args: select != null ? $"/select,\"{select}\"" : path != null ? $"\"{path}\"" : null);
     }
 
+    /// <summary>Windows' own notification banners are off only while the notch shows notifications instead.</summary>
+    public void ApplyBanners()
+    {
+        var hide = Settings.ShowIsland && Settings.UseNotch && Settings.Notch.Popups && Settings.Notch.HideWindowsBanners;
+        if (hide) _ = WindowsBanners.HideAsync();
+        else WindowsBanners.Restore();
+    }
+
     /// <summary>Windows sends every folder to DeskShell's explorer only while both settings are on.</summary>
     void ApplyFolderHandler()
     {
@@ -604,6 +619,7 @@ public partial class App : Application
         try
         {
             ScreenTime.Save();
+            WindowsBanners.Restore(); // Windows shows its banners again while DeskShell isn't running
             _watcher?.Dispose();
             NotificationWatcher.Stop();
             DiscordLink.Stop();

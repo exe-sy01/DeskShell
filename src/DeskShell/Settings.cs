@@ -140,6 +140,8 @@ public sealed class NotchStyle
     /// <summary>New notifications (and Discord DMs and mentions) pop out of the notch for a few seconds.</summary>
     public bool Popups { get; set; } = true;
     public double PopupSeconds { get; set; } = 6;
+    /// <summary>Switch off Windows' own banners for every app while DeskShell runs (they'd show twice otherwise).</summary>
+    public bool HideWindowsBanners { get; set; }
     public int FocusMinutes { get; set; } = 25;
     public int BreakMinutes { get; set; } = 5;
 }

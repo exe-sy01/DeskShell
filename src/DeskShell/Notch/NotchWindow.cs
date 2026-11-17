@@ -664,6 +664,7 @@ public sealed class NotchWindow : Window
         {
             _style.Popups = !_style.Popups;
             App.Settings.Save();
+            App.Instance.ApplyBanners(); // without the notch's pop-ups, Windows' banners come back
             ((TextBlock)((StackPanel)((Border)popups.Content).Child).Children[^1]).Text = PopupsText();
         };
         stack.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Children = { breathing, popups } });
