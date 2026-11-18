@@ -368,6 +368,16 @@ public sealed class Settings
             Migrations.Add("notch-notifications");
             if (!Notch.Tabs.Contains("notifications")) Notch.Tabs.Insert(Math.Min(1, Notch.Tabs.Count), "notifications");
         }
+        // Background apps (the tray), with no taskbar to reach them: after Notifications.
+        if (!Migrations.Contains("notch-tray"))
+        {
+            Migrations.Add("notch-tray");
+            if (!Notch.Tabs.Contains("tray"))
+            {
+                var after = Notch.Tabs.IndexOf("notifications");
+                Notch.Tabs.Insert(after >= 0 ? after + 1 : Math.Min(1, Notch.Tabs.Count), "tray");
+            }
+        }
     }
 
     /// <summary>Adds tiles introduced since this layout was saved (once; removing them later sticks).</summary>
