@@ -62,6 +62,9 @@
         </DataTemplate>
     </Window.Resources>
 
+    <Grid>
+    <!-- With the notch: the black shape that grows out of it (and shrinks back), drawn behind the contents -->
+    <Path x:Name="Morph" Fill="Black" Stroke="#24FFFFFF" StrokeThickness="1" Visibility="Collapsed" IsHitTestVisible="False" />
     <Border x:Name="Panel" Margin="14,0,14,24" Background="{DynamicResource IslandBrush}" BorderBrush="{DynamicResource IslandEdgeBrush}" BorderThickness="1"
             CornerRadius="28" Padding="18,18,18,14" RenderTransformOrigin="0.5,0">
         <Border.RenderTransform>
@@ -130,4 +133,5 @@
             </Grid>
         </DockPanel>
     </Border>
+    </Grid>
 </Window>

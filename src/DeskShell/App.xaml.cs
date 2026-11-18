@@ -62,6 +62,8 @@ public partial class App : Application
         // Other programs (a script, a Stream Deck button) can open Home by setting this event.
         var home = new EventWaitHandle(false, EventResetMode.AutoReset, "DeskShell.ToggleHome");
         ThreadPool.RegisterWaitForSingleObject(home, (_, _) => Dispatcher.BeginInvoke(ToggleHome), null, Timeout.Infinite, false);
+        var drawer = new EventWaitHandle(false, EventResetMode.AutoReset, "DeskShell.ToggleDrawer");
+        ThreadPool.RegisterWaitForSingleObject(drawer, (_, _) => Dispatcher.BeginInvoke(ToggleAppDrawer), null, Timeout.Infinite, false);
 
         DispatcherUnhandledException += (_, ex) =>
         {
@@ -468,6 +470,9 @@ public partial class App : Application
             });
         };
     }
+
+    /// <summary>The notch on <paramref name="screen"/> if there is one (the drawer grows out of it).</summary>
+    public Notch.NotchWindow? NotchOn(AppBarScreen screen) => _notches.FirstOrDefault(n => n.Screen.HMonitor == screen.HMonitor);
 
     /// <summary>The shell hotkey: with the notch, its Home panel on the screen you're on; otherwise the shell.</summary>
     public void ToggleHome()

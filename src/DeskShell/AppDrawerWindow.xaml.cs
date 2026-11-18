@@ -114,11 +114,14 @@ public partial class AppDrawerWindow : Window
 
         var style = App.Settings.Island;
         var hasIsland = App.Settings.ShowIsland && (App.Settings.IslandOnAllMonitors || screen.Primary);
+        _notch = App.Instance.NotchOn(screen);
         var scale = WmNative.ScaleFor(screen.HMonitor);
         var b = screen.Bounds;
-        var top = hasIsland ? style.TopGap + style.Height + 8 : 12;
+        // Out of the notch: flush with the top of the screen. Otherwise below the island.
+        var top = _notch != null ? 0 : hasIsland ? style.TopGap + style.Height + 8 : 12;
         var bottomClear = App.Instance.BottomStrip(screen);
-        Height = Math.Min(720, b.Height / scale - top - bottomClear - 8);
+        Height = Math.Min(_notch != null ? 740 : 720, b.Height / scale - top - bottomClear - 8);
+        SetNotchLook(_notch != null);
 
         SearchBox.Text = "";
         DisarmPower();
@@ -138,6 +141,17 @@ public partial class AppDrawerWindow : Window
         SearchBox.Focus();
         Keyboard.Focus(SearchBox);
 
+        if (_notch != null)
+        {
+            // The notch steps aside and the drawer grows out of its place.
+            _notch.SetDrawerOpen(true);
+            Panel.BeginAnimation(OpacityProperty, null);
+            BeginAnimation(MorphProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(380))
+            {
+                EasingFunction = new BackEase { Amplitude = 0.12, EasingMode = EasingMode.EaseOut }
+            });
+            return;
+        }
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
         var duration = TimeSpan.FromMilliseconds(190);
         Panel.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, duration));
@@ -149,12 +163,74 @@ public partial class AppDrawerWindow : Window
     {
         if (!IsOpen) return;
         IsOpen = false;
+        if (_notch != null)
+        {
+            // Shrink back into the notch, then hand the top of the screen back to it.
+            var notch = _notch;
+            var shrink = new DoubleAnimation(0, TimeSpan.FromMilliseconds(230)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } };
+            shrink.Completed += (_, _) =>
+            {
+                if (IsOpen) return; // opened again meanwhile
+                FinishClosing();
+                notch.SetDrawerOpen(false);
+            };
+            BeginAnimation(MorphProperty, shrink);
+            return;
+        }
+        FinishClosing();
+    }
+
+    void FinishClosing()
+    {
         Hide();
         Rows.ItemsSource = null;
         _rows.Clear();
         _cells.Clear();
         _selected = -1;
         App.Instance.TrimMemorySoon();
+    }
+
+    // ---------- growing out of the notch ----------
+
+    Notch.NotchWindow? _notch;
+    System.Windows.Media.Effects.Effect? _shadow;
+
+    public static readonly DependencyProperty MorphProperty = DependencyProperty.Register("Morph", typeof(double), typeof(AppDrawerWindow),
+        new PropertyMetadata(0.0, (d, _) => ((AppDrawerWindow)d).LayoutMorph()));
+
+    /// <summary>With the notch, the drawer is the notch grown big: flush with the top, flaring into it, no floating card.</summary>
+    void SetNotchLook(bool notch)
+    {
+        _shadow ??= Panel.Effect;
+        Morph.Visibility = notch ? Visibility.Visible : Visibility.Collapsed;
+        Panel.Effect = notch ? null : _shadow;
+        Panel.Margin = notch ? new Thickness(14 + Notch.NotchWindow.Ear, 0, 14 + Notch.NotchWindow.Ear, 24) : new Thickness(14, 0, 14, 24);
+        Panel.Padding = notch ? new Thickness(18, 14, 18, 14) : new Thickness(18, 18, 18, 14);
+        Panel.BorderThickness = new Thickness(notch ? 0 : 1);
+        if (notch) Panel.Background = Brushes.Transparent;
+        else Panel.SetResourceReference(Border.BackgroundProperty, "IslandBrush");
+        Panel.Clip = null;
+        PanelScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        PanelScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        PanelScale.ScaleX = PanelScale.ScaleY = 1;
+    }
+
+    /// <summary>The shape for the current step between the small notch (0) and the open drawer (1).</summary>
+    void LayoutMorph()
+    {
+        if (_notch == null) return;
+        var p = (double)GetValue(MorphProperty);
+        const double ear = Notch.NotchWindow.Ear;
+        var bigW = Width - Panel.Margin.Left - Panel.Margin.Right;
+        var bigH = Height - Panel.Margin.Bottom;
+        var w = Notch.NotchWindow.SmallW + (bigW - Notch.NotchWindow.SmallW) * p;
+        var h = Notch.NotchWindow.SmallH + (bigH - Notch.NotchWindow.SmallH) * p;
+        var r = Notch.NotchWindow.SmallR + (28 - Notch.NotchWindow.SmallR) * Math.Clamp(p, 0, 1);
+        var left = (Width - (w + 2 * ear)) / 2;
+        Morph.Data = Notch.NotchShape.Fill(left, w, h, ear, r);
+        // The contents fade in once there's room for them (and out first when closing), inside the shape.
+        Panel.Opacity = IsOpen ? Math.Clamp((p - 0.55) / 0.45, 0, 1) : Math.Clamp((p - 0.8) / 0.2, 0, 1);
+        Panel.Clip = Notch.NotchShape.Fill(left - Panel.Margin.Left, w, h, ear, r);
     }
 
     public void ForceClose()

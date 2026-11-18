@@ -21,10 +21,10 @@ namespace DeskShell.Notch;
 public sealed class NotchWindow : Window
 {
     // Sizes in device-independent pixels. The body's width doesn't include the two flares (Ear).
-    const double SmallW = 186, SmallH = 34, SmallR = 13;
+    internal const double SmallW = 186, SmallH = 34, SmallR = 13;
     const double BigW = 760, BigH = 382, BigR = 28;
     const double PopW = 400, PopH = 70, PopR = 24;
-    const double Ear = 11;
+    internal const double Ear = 11;
     /// <summary>Room around the shape for the glow.</summary>
     const double Room = 16;
 
@@ -832,9 +832,18 @@ public sealed class NotchWindow : Window
         _panel.Clip = NotchShape.Fill(left - panelLeft, w, h, Ear, r);
     }
 
+    bool _drawerOpen;
+
+    /// <summary>While the app drawer is open on this screen it grows out of the notch, so the notch steps aside.</summary>
+    public void SetDrawerOpen(bool open)
+    {
+        _drawerOpen = open;
+        UpdateVisibility();
+    }
+
     void UpdateVisibility()
     {
-        var covered = App.Settings.Island.HideFullscreen && App.Fullscreen?.IsCovered(Screen.HMonitor) == true;
+        var covered = _drawerOpen || App.Settings.Island.HideFullscreen && App.Fullscreen?.IsCovered(Screen.HMonitor) == true;
         Visibility = covered ? Visibility.Hidden : Visibility.Visible;
         if (covered)
         {
