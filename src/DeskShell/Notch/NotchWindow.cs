@@ -71,14 +71,62 @@ public sealed class NotchWindow : Window
 
         NotificationWatcher.Arrived += OnToast;
         DiscordLink.MessageArrived += OnDiscordMessage;
+        Claude.ClaudeHub.Changed += OnClaudeChanged;
+        Claude.ClaudeHub.Finished += OnClaudeFinished;
+        Claude.ClaudeHub.ApprovalArrived += OnClaudeApproval;
         _open++;
         Closed += (_, _) =>
         {
             _open--;
             NotificationWatcher.Arrived -= OnToast;
             DiscordLink.MessageArrived -= OnDiscordMessage;
+            Claude.ClaudeHub.Changed -= OnClaudeChanged;
+            Claude.ClaudeHub.Finished -= OnClaudeFinished;
+            Claude.ClaudeHub.ApprovalArrived -= OnClaudeApproval;
             _popTimer?.Stop();
         };
+    }
+
+    // ---------- Claude ----------
+
+    /// <summary>The pet in the closed notch shows what Claude is up to.</summary>
+    void OnClaudeChanged()
+    {
+        _pet.Mood = Claude.ClaudeHub.Overall switch
+        {
+            Claude.ClaudeState.NeedsYou => PetMood.NeedsYou,
+            Claude.ClaudeState.Working => PetMood.Working,
+            _ => PetMood.Idle
+        };
+        // A request answered somewhere else (in Claude, or the Claude tab): its pop-up goes.
+        if (_popApproval != null && !Claude.ClaudeHub.Approvals.Contains(_popApproval))
+        {
+            _popApproval = null;
+            EndPop();
+        }
+    }
+
+    Claude.ClaudeApproval? _popApproval;
+
+    /// <summary>Done: the pet hops, and after a longer job the notch says so.</summary>
+    void OnClaudeFinished(Claude.ClaudeSession session, TimeSpan took)
+    {
+        _pet.Hop();
+        if (took > TimeSpan.FromSeconds(20))
+            ShowPop(null, false, $"Claude finished · {session.Project}", session.Prompt, OpenClaude);
+    }
+
+    /// <summary>A request to allow something: it stays up until it's answered (click to answer it in the Claude tab).</summary>
+    void OnClaudeApproval(Claude.ClaudeApproval approval)
+    {
+        _popApproval = approval;
+        ShowPop(null, false, $"Claude needs your OK · {approval.Project}", approval.Summary, OpenClaude, Claude.ClaudeHook.ApprovalWaitSeconds);
+    }
+
+    void OpenClaude()
+    {
+        Expand();
+        ShowTab("claude");
     }
 
     void OnToast(ToastItem item) => Dispatcher.BeginInvoke(() =>
@@ -95,7 +143,7 @@ public sealed class NotchWindow : Window
     });
 
     /// <summary>Grows the notch wide to show a notification for a few seconds. Resting the mouse on it keeps it; clicking opens it.</summary>
-    void ShowPop(ImageSource? icon, bool round, string title, string body, Action click)
+    void ShowPop(ImageSource? icon, bool round, string title, string body, Action click, double? seconds = null)
     {
         // Not over a game or with Do Not Disturb on, and not while Home is open.
         if (!_style.Popups || !IsVisible || _expanded || GameMode.Active || DoNotDisturb.IsOn) return;
@@ -124,7 +172,7 @@ public sealed class NotchWindow : Window
         _popTimer.Tick -= PopTimeUp;
         _popTimer.Tick += PopTimeUp;
         _popTimer.Stop();
-        _popTimer.Interval = TimeSpan.FromSeconds(Math.Clamp(_style.PopupSeconds, 2, 30));
+        _popTimer.Interval = TimeSpan.FromSeconds(seconds ?? Math.Clamp(_style.PopupSeconds, 2, 30));
         if (!IsMouseOver) _popTimer.Start();
     }
 
@@ -275,6 +323,7 @@ public sealed class NotchWindow : Window
             UpdateClock();
             UpdateSide();
             OnMediaChanged();
+            OnClaudeChanged();
             UpdateVisibility();
         };
         Closed += (_, _) =>
@@ -335,9 +384,9 @@ public sealed class NotchWindow : Window
         _small.ColumnDefinitions.Add(new ColumnDefinition());
         _small.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         _clock.Margin = new Thickness(15, 0, 0, 1);
-        _side.Margin = new Thickness(0, 0, 14, 1);
+        _side.Margin = new Thickness(0, 0, 4, 1);
         _speakers.Margin = new Thickness(0, 0, 10, 0);
-        var sideHost = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { _speakers, _side } };
+        var sideHost = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { _speakers, _side, _pet } };
         Grid.SetColumn(sideHost, 1);
         _small.Children.Add(_clock);
         _small.Children.Add(sideHost);
@@ -392,6 +441,8 @@ public sealed class NotchWindow : Window
 
     // In a call: who's talking (and who talked a moment ago, so faces don't flicker between words)
     readonly StackPanel _speakers = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+    /// <summary>The pet, at the notch's right end; its mood follows Claude.</summary>
+    readonly Pet _pet = new() { Margin = new Thickness(2, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
     readonly Dictionary<string, long> _lastSpoke = new();
     DispatcherTimer? _speakerHold;
     const long SpeakerHoldMs = 1200;
@@ -430,7 +481,7 @@ public sealed class NotchWindow : Window
             _side.FontSize = 12;
             _side.Text = talking.Count > 4 ? $"+{talking.Count - 4}" : talking.Count == 0 ? "" : "";
             _side.Foreground = Avatars.Talking;
-            _side.Margin = new Thickness(0, 0, talking.Count > 0 && talking.Count <= 4 ? 4 : 14, 1);
+            _side.Margin = new Thickness(0, 0, talking.Count > 0 && talking.Count <= 4 ? 2 : 4, 1);
             // Look again when someone's moment after talking runs out.
             if (talking.Any(p => !p.Speaking))
             {
@@ -439,7 +490,7 @@ public sealed class NotchWindow : Window
             }
             return;
         }
-        _side.Margin = new Thickness(0, 0, 14, 1);
+        _side.Margin = new Thickness(0, 0, 4, 1);
         if (FocusTimer.Running || FocusTimer.Current != FocusTimer.Phase.Ready)
         {
             _side.FontFamily = UI.Font;

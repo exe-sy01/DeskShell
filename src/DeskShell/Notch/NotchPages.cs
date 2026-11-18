@@ -48,13 +48,14 @@ abstract class NotchPage(NotchContext context)
 
     public static readonly (string Id, string Title, string Glyph)[] All =
     [
-        ("home", "Home", ""), ("call", "Voice call", ""), ("windows", "Windows", ""), ("system", "System", ""), ("clipboard", "Clipboard", ""), ("notes", "Notes", ""),
+        ("home", "Home", ""), ("claude", "Claude", ""), ("call", "Voice call", ""), ("windows", "Windows", ""), ("system", "System", ""), ("clipboard", "Clipboard", ""), ("notes", "Notes", ""),
         ("focus", "Focus", ""), ("files", "Files", ""), ("apps", "Apps", ""), ("weather", "Weather", ""),
         ("media", "Music", ""), ("screentime", "Screen time", "")
     ];
 
     public static NotchPage Create(string id, NotchContext c) => id switch
     {
+        "claude" => new ClaudePage(c),
         "call" => new CallPage(c),
         "windows" => new WindowsPage(c),
         "system" => new SystemPage(c),

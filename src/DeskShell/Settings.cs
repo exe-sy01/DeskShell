@@ -150,7 +150,7 @@ public sealed class NotchStyle
     public int HoverDelay { get; set; } = 250;
     public bool Seconds { get; set; }
     /// <summary>Tabs in the bar, in order.</summary>
-    public List<string> Tabs { get; set; } = ["home", "windows", "system", "clipboard", "notes", "focus", "files", "apps", "weather", "media", "screentime"];
+    public List<string> Tabs { get; set; } = ["home", "claude", "windows", "system", "clipboard", "notes", "focus", "files", "apps", "weather", "media", "screentime"];
     /// <summary>New notifications (and Discord DMs and mentions) pop out of the notch for a few seconds.</summary>
     public bool Popups { get; set; } = true;
     public double PopupSeconds { get; set; } = 6;
@@ -343,6 +343,12 @@ public sealed class Settings
         {
             Migrations.Add("notch-windows");
             if (!Notch.Tabs.Contains("windows")) Notch.Tabs.Insert(Math.Min(1, Notch.Tabs.Count), "windows");
+        }
+        // The Claude tab came later still: right after Home.
+        if (!Migrations.Contains("notch-claude"))
+        {
+            Migrations.Add("notch-claude");
+            if (!Notch.Tabs.Contains("claude")) Notch.Tabs.Insert(Math.Min(1, Notch.Tabs.Count), "claude");
         }
     }
 

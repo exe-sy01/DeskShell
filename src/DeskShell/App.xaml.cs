@@ -144,6 +144,7 @@ public partial class App : Application
         DiscordLink.Start();
         _clipboard = new ClipboardHistory();
         ScreenTime.Start();
+        Claude.ClaudeHub.Start(Dispatcher); // Claude Code sessions report here through their hooks
         CreateBars();
         StartWatchingSystem();
 
@@ -630,6 +631,7 @@ public partial class App : Application
         try
         {
             ScreenTime.Save();
+            Claude.ClaudeHub.Stop(); // any waiting requests go back to Claude's own prompt
             WindowsBanners.Restore(); // Windows shows its banners again while DeskShell isn't running
             _watcher?.Dispose();
             NotificationWatcher.Stop();

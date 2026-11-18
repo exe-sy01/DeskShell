@@ -121,6 +121,13 @@
                     <TextBlock x:Name="IslandImportStatus" Style="{StaticResource Note}" VerticalAlignment="Center" Margin="12,0,0,0" />
                 </StackPanel>
 
+                <TextBlock Style="{StaticResource Section}" Text="Claude Code" />
+                <TextBlock Style="{StaticResource Note}" Text="Connecting adds DeskShell to Claude Code's hooks in %USERPROFILE%\.claude\settings.json (a backup copy is saved next to it first). Your sessions from the desktop app, terminals and IDEs then show in the notch's Claude tab, the pet follows what they're doing, and requests to allow something pop up in the notch. If you don't answer there within 45 seconds, Claude asks in its own window as usual." />
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                    <Button x:Name="ClaudeConnect" Style="{StaticResource PillButton}" Tag="&#xE71B;" Click="ClaudeConnect_Click" />
+                    <TextBlock x:Name="ClaudeStatus" Style="{StaticResource Note}" VerticalAlignment="Center" Margin="12,0,0,0" />
+                </StackPanel>
+
                 <TextBlock Style="{StaticResource Section}" Text="Windows taskbar" />
                 <CheckBox x:Name="ShowWindowsTaskbar" Style="{StaticResource Switch}" Margin="0,4,0,8"
                           Content="Show the Windows taskbar, with the tray icons, alongside the island" />

@@ -63,8 +63,42 @@ public partial class SettingsWindow : Window
         BuildMonitorLayouts();
         BuildRules();
         BuildTheme();
+        ShowClaudeState();
         // Closing without saving puts the saved theme back.
         Closed += (_, _) => { if (!_themeSaved) ThemeManager.Refresh(); };
+    }
+
+    // ---------- Claude Code ----------
+
+    void ShowClaudeState()
+    {
+        var on = Claude.ClaudeSetup.IsInstalled();
+        ClaudeConnect.Content = on ? "Disconnect Claude Code" : "Connect Claude Code";
+        ClaudeStatus.Text = on ? "Connected" : "Not connected";
+    }
+
+    /// <summary>Applies at once (it edits Claude Code's own settings, not DeskShell's).</summary>
+    void ClaudeConnect_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (Claude.ClaudeSetup.IsInstalled())
+            {
+                Claude.ClaudeSetup.Uninstall();
+                ShowClaudeState();
+                ClaudeStatus.Text = "Disconnected";
+            }
+            else
+            {
+                var backup = Claude.ClaudeSetup.Install(Installer.IsInstalled ? Installer.InstalledExe : Environment.ProcessPath!);
+                ShowClaudeState();
+                ClaudeStatus.Text = $"Connected (backup: {System.IO.Path.GetFileName(backup)})";
+            }
+        }
+        catch (Exception ex)
+        {
+            ClaudeStatus.Text = "Couldn't change Claude Code's settings: " + ex.Message;
+        }
     }
 
     // ---------- theme ----------
