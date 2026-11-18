@@ -19,7 +19,7 @@ sealed class ClaudePage(NotchContext c) : NotchPage(c)
     readonly TextBlock _headline = UI.Label("", 15, bold: true, font: UI.Display);
     readonly TextBlock _subline = UI.Label("", 12, brush: UI.Dim);
     readonly StackPanel _list = new();
-    ClaudeChatView? _chat;
+    ChatView? _chat;
     bool _listening;
 
     protected override UIElement Build()
@@ -37,7 +37,7 @@ sealed class ClaudePage(NotchContext c) : NotchPage(c)
         left.Children.Add(head);
         left.Children.Add(new ScrollViewer { Content = _list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
 
-        _chat = new ClaudeChatView(Context.Activate);
+        _chat = new ChatView(new ClaudeChatBackend(), Context.Activate);
         var chatCard = new Border
         {
             Background = UI.Card, BorderBrush = UI.CardEdge, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(18),

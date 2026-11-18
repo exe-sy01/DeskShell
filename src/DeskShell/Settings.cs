@@ -350,6 +350,16 @@ public sealed class Settings
             Migrations.Add("notch-claude");
             if (!Notch.Tabs.Contains("claude")) Notch.Tabs.Insert(Math.Min(1, Notch.Tabs.Count), "claude");
         }
+        // Sage (PCAssistant) gets a tab after Claude's, if it's installed.
+        if (!Migrations.Contains("notch-sage"))
+        {
+            Migrations.Add("notch-sage");
+            if (DeskShell.Sage.SageLink.Installed && !Notch.Tabs.Contains("sage"))
+            {
+                var claude = Notch.Tabs.IndexOf("claude");
+                Notch.Tabs.Insert(claude >= 0 ? claude + 1 : Math.Min(1, Notch.Tabs.Count), "sage");
+            }
+        }
     }
 
     /// <summary>Adds tiles introduced since this layout was saved (once; removing them later sticks).</summary>

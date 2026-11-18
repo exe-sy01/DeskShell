@@ -8,16 +8,44 @@ using DeskShell.Claude;
 
 namespace DeskShell.Notch;
 
+/// <summary>Who a <see cref="ChatView"/> talks to.</summary>
+interface IChatBackend
+{
+    /// <summary>"Claude", "Sage": used in the message box's placeholder.</summary>
+    string Name { get; }
+    bool Available { get; }
+    string UnavailableMessage { get; }
+    string Welcome { get; }
+    bool Busy { get; }
+    /// <summary>Sends a message and streams the reply. Throws <see cref="OperationCanceledException"/> when stopped, any other exception with a message fit to show.</summary>
+    Task SendAsync(string prompt, Action<string> onDelta, Action<string> onStatus, CancellationToken ct);
+    /// <summary>Forgets the conversation (New chat).</summary>
+    void Reset();
+}
+
+/// <summary>The Claude CLI chat behind the Claude tab.</summary>
+sealed class ClaudeChatBackend : IChatBackend
+{
+    readonly ClaudeChat _chat = new();
+    public string Name => "Claude";
+    public bool Available => ClaudeChat.Available;
+    public string UnavailableMessage => ClaudeChat.NotInstalledMessage;
+    public string Welcome => "Ask Claude anything. It uses your Claude subscription and can't see or change your files.";
+    public bool Busy => _chat.Busy;
+    public Task SendAsync(string prompt, Action<string> onDelta, Action<string> onStatus, CancellationToken ct) => _chat.SendAsync(prompt, onDelta, onStatus, ct);
+    public void Reset() => _chat.Reset();
+}
+
 /// <summary>
-/// The notch's Claude tab: a scrolling chat transcript with a message box under it.
-/// Your messages sit right in rounded bubbles; Claude's replies are plain, selectable text so they can be copied.
+/// A notch chat: a scrolling transcript with a message box under it.
+/// Your messages sit right in rounded bubbles; replies are plain, selectable text so they can be copied.
 /// </summary>
-sealed class ClaudeChatView : Grid
+sealed class ChatView : Grid
 {
     const string SendGlyph = "";
     const string StopGlyph = "";
 
-    readonly ClaudeChat _chat = new();
+    readonly IChatBackend _chat;
     readonly Action _activate;
     readonly StackPanel _log = new() { Margin = new Thickness(0, 0, 6, 0) };
     readonly ScrollViewer _scroll;
@@ -32,8 +60,9 @@ sealed class ClaudeChatView : Grid
     bool _stick = true;
 
     /// <param name="activate">Lets the notch take keyboard focus; called when the message box is clicked or focused.</param>
-    public ClaudeChatView(Action activate)
+    public ChatView(IChatBackend backend, Action activate)
     {
+        _chat = backend;
         _activate = activate;
         RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -48,7 +77,7 @@ sealed class ClaudeChatView : Grid
         _scroll.ScrollChanged += OnScrollChanged;
         Children.Add(_scroll);
 
-        var fieldHost = UI.Field("Ask Claude…", out _input);
+        var fieldHost = UI.Field($"Ask {backend.Name}…", out _input);
         _input.AcceptsReturn = true;
         _input.TextWrapping = TextWrapping.Wrap;
         _input.MaxHeight = 96;
@@ -97,13 +126,76 @@ sealed class ClaudeChatView : Grid
 
     void ShowWelcome()
     {
-        var text = ClaudeChat.Available
-            ? "Ask Claude anything. It uses your Claude subscription and can't see or change your files."
-            : ClaudeChat.NotInstalledMessage;
-        var welcome = Note(text);
+        var welcome = Note(_chat.Available ? _chat.Welcome : _chat.UnavailableMessage);
         welcome.Margin = new Thickness(2, 4, 0, 0);
         welcome.Tag = "welcome";
         _log.Children.Add(welcome);
+    }
+
+    void DropWelcome()
+    {
+        if (_log.Children.Count == 1 && _log.Children[0] is FrameworkElement { Tag: "welcome" }) _log.Children.Clear();
+    }
+
+    /// <summary>Shows the welcome line again if the chat is empty (say, once the backend becomes available).</summary>
+    public void RefreshWelcome()
+    {
+        if (_log.Children.Count > 1 || _busy) return;
+        _log.Children.Clear();
+        ShowWelcome();
+    }
+
+    /// <summary>Replaces the transcript with earlier messages (true = yours).</summary>
+    public void ShowHistory(IEnumerable<(bool Mine, string Text)> messages)
+    {
+        if (_busy) return;
+        _log.Children.Clear();
+        foreach (var (mine, text) in messages)
+        {
+            if (mine) _log.Children.Add(UserBubble(text));
+            else
+            {
+                var reply = ReplyBox();
+                reply.Text = ChatText.Tidy(text);
+                _log.Children.Add(reply);
+            }
+        }
+        if (_log.Children.Count == 0) ShowWelcome();
+        _stick = true;
+        _scroll.ScrollToEnd();
+    }
+
+    /// <summary>
+    /// A message that started somewhere else (said out loud, say): shows it, and returns a sink for its reply.
+    /// Call the first action with each piece of the reply and the second when it ends (with an error, or null).
+    /// </summary>
+    public (Action<string> Delta, Action<string?> Done) AddExternal(string text)
+    {
+        DropWelcome();
+        if (text.Length > 0) _log.Children.Add(UserBubble(text));
+        var reply = ReplyBox();
+        reply.Visibility = Visibility.Collapsed;
+        var status = Note("Thinking…");
+        _log.Children.Add(reply);
+        _log.Children.Add(status);
+        _stick = true;
+        _scroll.ScrollToEnd();
+        var conversation = _conversation;
+        var raw = new StringBuilder();
+        return (delta =>
+        {
+            if (conversation != _conversation) return;
+            raw.Append(delta);
+            reply.Text = ChatText.Tidy(raw.ToString());
+            reply.Visibility = Visibility.Visible;
+            status.Visibility = Visibility.Collapsed;
+        }, error =>
+        {
+            if (conversation != _conversation) return;
+            if (error != null) Show(status, error);
+            else if (raw.Length == 0) Show(status, "No reply.");
+            else _log.Children.Remove(status);
+        });
     }
 
     void SendOrStop()
@@ -129,10 +221,10 @@ sealed class ClaudeChatView : Grid
         var text = _input.Text.Trim();
         if (text.Length == 0 || _busy) return;
 
-        if (_log.Children.Count == 1 && _log.Children[0] is FrameworkElement { Tag: "welcome" }) _log.Children.Clear();
-        if (!ClaudeChat.Available)
+        DropWelcome();
+        if (!_chat.Available)
         {
-            _log.Children.Add(Note(ClaudeChat.NotInstalledMessage));
+            _log.Children.Add(Note(_chat.UnavailableMessage));
             return;
         }
 
@@ -180,11 +272,7 @@ sealed class ClaudeChatView : Grid
         {
             if (conversation == _conversation) Show(status, "Stopped.");
         }
-        catch (ClaudeChatException e)
-        {
-            if (conversation == _conversation) Show(status, e.Message);
-        }
-        catch (InvalidOperationException e)
+        catch (Exception e)
         {
             if (conversation == _conversation) Show(status, e.Message);
         }

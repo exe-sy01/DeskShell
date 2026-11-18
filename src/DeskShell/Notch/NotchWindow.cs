@@ -74,6 +74,7 @@ public sealed class NotchWindow : Window
         Claude.ClaudeHub.Changed += OnClaudeChanged;
         Claude.ClaudeHub.Finished += OnClaudeFinished;
         Claude.ClaudeHub.ApprovalArrived += OnClaudeApproval;
+        SubscribeSage(true);
         _open++;
         Closed += (_, _) =>
         {
@@ -83,6 +84,7 @@ public sealed class NotchWindow : Window
             Claude.ClaudeHub.Changed -= OnClaudeChanged;
             Claude.ClaudeHub.Finished -= OnClaudeFinished;
             Claude.ClaudeHub.ApprovalArrived -= OnClaudeApproval;
+            SubscribeSage(false);
             _popTimer?.Stop();
         };
     }
@@ -127,6 +129,130 @@ public sealed class NotchWindow : Window
     {
         Expand();
         ShowTab("claude");
+    }
+
+    // ---------- Sage ----------
+
+    Sage.SageApproval? _popSage;
+    string? _sageVoiceOp;
+    readonly System.Text.StringBuilder _sageReply = new();
+    DispatcherTimer? _sageFlush;
+    static readonly Dictionary<Color, ImageSource> SageIcons = [];
+
+    static ImageSource SageIcon(Color color)
+    {
+        if (!SageIcons.TryGetValue(color, out var icon)) SageIcons[color] = icon = SageOrb.Icon(color);
+        return icon;
+    }
+
+    void SubscribeSage(bool on)
+    {
+        if (on)
+        {
+            Sage.SageLink.WakeDetected += OnSageWake;
+            Sage.SageLink.Heard += OnSageHeard;
+            Sage.SageLink.VoiceChatStarted += OnSageVoiceChat;
+            Sage.SageLink.ChatDelta += OnSageDelta;
+            Sage.SageLink.ChatCompleted += OnSageDone;
+            Sage.SageLink.ChatFailed += OnSageFailed;
+            Sage.SageLink.ApprovalArrived += OnSageApproval;
+            Sage.SageLink.ApprovalGone += OnSageApprovalGone;
+        }
+        else
+        {
+            Sage.SageLink.WakeDetected -= OnSageWake;
+            Sage.SageLink.Heard -= OnSageHeard;
+            Sage.SageLink.VoiceChatStarted -= OnSageVoiceChat;
+            Sage.SageLink.ChatDelta -= OnSageDelta;
+            Sage.SageLink.ChatCompleted -= OnSageDone;
+            Sage.SageLink.ChatFailed -= OnSageFailed;
+            Sage.SageLink.ApprovalArrived -= OnSageApproval;
+            Sage.SageLink.ApprovalGone -= OnSageApprovalGone;
+            _sageFlush?.Stop();
+        }
+    }
+
+    void OnSageWake() => ShowPop(SageIcon(SageOrb.Listen), true, Sage.SageLink.Name, "Listening…", OpenSage, 12);
+
+    void OnSageHeard(string text)
+    {
+        if (_sageVoiceOp != null) return;
+        ShowPop(SageIcon(SageOrb.Think), true, $"{Sage.SageLink.Name} · you said", text, OpenSage, 12);
+    }
+
+    /// <summary>Something said out loud: the notch shows it, then Sage's answer as it comes in.</summary>
+    void OnSageVoiceChat(string op, string conversation, string text)
+    {
+        _sageVoiceOp = op;
+        _sageReply.Clear();
+        ShowPop(SageIcon(SageOrb.Think), true, Sage.SageLink.Name, text.Length > 0 ? $"“{text}”" : "Thinking…", OpenSage, 30);
+    }
+
+    void OnSageDelta(string op, string text)
+    {
+        if (op != _sageVoiceOp) return;
+        _sageReply.Append(text);
+        // A few updates a second is plenty (each one redraws the notch).
+        if (_sageFlush == null)
+        {
+            _sageFlush = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher) { Interval = TimeSpan.FromMilliseconds(250) };
+            _sageFlush.Tick += (_, _) =>
+            {
+                _sageFlush!.Stop();
+                if (_sageVoiceOp != null) ShowPop(SageIcon(SageOrb.Talk), true, Sage.SageLink.Name, Tail(_sageReply.ToString()), OpenSage, 30);
+            };
+        }
+        if (!_sageFlush.IsEnabled) _sageFlush.Start();
+    }
+
+    void OnSageDone(string op, string content)
+    {
+        if (op != _sageVoiceOp) return;
+        _sageVoiceOp = null;
+        _sageFlush?.Stop();
+        var reply = _sageReply.Length > 0 ? _sageReply.ToString() : content;
+        if (reply.Trim().Length == 0) { EndPop(); return; }
+        // Long enough to read (or hear) the end of it.
+        var words = reply.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        ShowPop(SageIcon(SageOrb.Talk), true, Sage.SageLink.Name, Tail(reply), OpenSage, Math.Clamp(words / 2.5, 6, 30));
+    }
+
+    void OnSageFailed(string op, string error, bool cancelled)
+    {
+        if (op != _sageVoiceOp) return;
+        _sageVoiceOp = null;
+        _sageFlush?.Stop();
+        if (cancelled) EndPop();
+        else ShowPop(SageIcon(SageOrb.Trouble), true, Sage.SageLink.Name, error, OpenSage, 8);
+    }
+
+    void OnSageApproval(Sage.SageApproval approval)
+    {
+        _popSage = approval;
+        var seconds = Math.Clamp((approval.ExpiresAt - DateTimeOffset.Now).TotalSeconds, 5, 120);
+        ShowPop(SageIcon(SageOrb.Ask), true, $"{Sage.SageLink.Name} needs your OK", approval.Summary, OpenSage, seconds);
+    }
+
+    void OnSageApprovalGone(Sage.SageApproval approval)
+    {
+        if (_popSage != approval) return;
+        _popSage = null;
+        EndPop();
+    }
+
+    /// <summary>The last line or so of a reply, for the one-line pop-up.</summary>
+    static string Tail(string text)
+    {
+        text = text.ReplaceLineEndings(" ").Replace("**", "").Trim();
+        if (text.Length <= 110) return text;
+        var cut = text.IndexOf(' ', text.Length - 105);
+        return "…" + text[(cut > 0 ? cut + 1 : text.Length - 105)..];
+    }
+
+    void OpenSage()
+    {
+        Expand();
+        ShowTab("sage");
     }
 
     void OnToast(ToastItem item) => Dispatcher.BeginInvoke(() =>

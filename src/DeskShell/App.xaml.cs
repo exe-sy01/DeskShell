@@ -145,6 +145,7 @@ public partial class App : Application
         _clipboard = new ClipboardHistory();
         ScreenTime.Start();
         Claude.ClaudeHub.Start(Dispatcher); // Claude Code sessions report here through their hooks
+        Sage.SageLink.Start(Dispatcher); // Sage (PCAssistant), if it's running
         CreateBars();
         StartWatchingSystem();
 
@@ -632,6 +633,7 @@ public partial class App : Application
         {
             ScreenTime.Save();
             Claude.ClaudeHub.Stop(); // any waiting requests go back to Claude's own prompt
+            Sage.SageLink.Stop();
             WindowsBanners.Restore(); // Windows shows its banners again while DeskShell isn't running
             _watcher?.Dispose();
             NotificationWatcher.Stop();
