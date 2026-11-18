@@ -58,7 +58,7 @@ sealed class Ring : FrameworkElement
 
     public double Value { get => (double)GetValue(ValueProperty); set => SetValue(ValueProperty, value); }
     public double Thickness { get; set; } = 5;
-    public Brush Track { get; set; } = new SolidColorBrush(Color.FromArgb(0x2E, 0xFF, 0xFF, 0xFF));
+    public Brush Track { get; set; } = ThemeManager.Brushes.Raised;
     public Brush Fill { get; set; } = Brushes.OrangeRed;
     public double TextSize { get; set; } = 12;
 
@@ -93,7 +93,7 @@ sealed class Ring : FrameworkElement
 
         var text = new FormattedText($"{Math.Round(Value)}%", System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
             new Typeface(new FontFamily("Segoe UI Variable Text, Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal),
-            TextSize, Brushes.White, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+            TextSize, ThemeManager.Brushes.Text, VisualTreeHelper.GetDpi(this).PixelsPerDip);
         dc.DrawText(text, new Point(center.X - text.Width / 2, center.Y - text.Height / 2));
     }
 }
@@ -101,13 +101,16 @@ sealed class Ring : FrameworkElement
 /// <summary>Small builders shared by the panel's cards and pages.</summary>
 static class UI
 {
-    public static readonly Brush Card = Frozen(Color.FromRgb(0x14, 0x14, 0x14));
-    public static readonly Brush CardEdge = Frozen(Color.FromArgb(0x16, 0xFF, 0xFF, 0xFF));
-    public static readonly Brush Raised = Frozen(Color.FromRgb(0x24, 0x24, 0x24));
-    public static readonly Brush RaisedHover = Frozen(Color.FromRgb(0x30, 0x30, 0x30));
-    public static readonly Brush Text = Brushes.White;
-    public static readonly Brush Dim = Frozen(Color.FromRgb(0x9A, 0x9A, 0x9A));
-    public static readonly Brush Faint = Frozen(Color.FromRgb(0x5C, 0x5C, 0x5C));
+    // The theme's colours (Settings → Theme), read when something is built
+    public static Brush Background => ThemeManager.Brushes.Background;
+    public static Brush Card => ThemeManager.Brushes.Card;
+    public static Brush CardEdge => ThemeManager.Brushes.Edge;
+    public static Brush Raised => ThemeManager.Brushes.Raised;
+    public static Brush RaisedHover => ThemeManager.Brushes.RaisedHover;
+    public static Brush Text => ThemeManager.Brushes.Text;
+    public static Brush Dim => ThemeManager.Brushes.TextDim;
+    public static Brush Faint => ThemeManager.Brushes.Faint;
+    public static Brush Accent => ThemeManager.Brushes.Accent;
     public static readonly FontFamily Font = new("Segoe UI Variable Text, Segoe UI");
     public static readonly FontFamily Display = new("Segoe UI Variable Display, Segoe UI");
     public static readonly FontFamily Icons = new("Segoe Fluent Icons, Segoe MDL2 Assets");
@@ -188,8 +191,8 @@ static class UI
     /// <summary>A round icon button (play, add, copy…).</summary>
     public static Button Round(string glyph, double size, Action click, string? tip = null, bool light = false)
     {
-        var bg = new Border { CornerRadius = new CornerRadius(size / 2), Background = light ? Brushes.White : Raised, Width = size, Height = size };
-        bg.Child = Glyph(glyph, size * 0.36, light ? Brushes.Black : Text);
+        var bg = new Border { CornerRadius = new CornerRadius(size / 2), Background = light ? Text : Raised, Width = size, Height = size };
+        bg.Child = Glyph(glyph, size * 0.36, light ? Background : Text);
         var button = new Button { Content = bg, ToolTip = tip, Cursor = System.Windows.Input.Cursors.Hand, Template = Bare(), Focusable = false };
         if (tip != null) System.Windows.Automation.AutomationProperties.SetName(button, tip);
         button.MouseEnter += (_, _) => { if (!light) bg.Background = RaisedHover; };

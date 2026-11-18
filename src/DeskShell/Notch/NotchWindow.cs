@@ -163,7 +163,7 @@ public sealed class NotchWindow : Window
     readonly Grid _panel = new() { Width = BigW, Height = BigH };
     readonly Border _pageHost = new();
     readonly StackPanel _tabs = new() { Orientation = Orientation.Horizontal };
-    readonly TextBlock _headGlyph = UI.Glyph("", 13, Brushes.Black);
+    readonly TextBlock _headGlyph = UI.Glyph("", 13, UI.Background);
     readonly TextBlock _headTitle = UI.Label("", 15, bold: true);
     readonly TextBlock _headDate = UI.Label("", 13, brush: UI.Dim);
     readonly Popup _colours = new() { StaysOpen = false, AllowsTransparency = true, Placement = PlacementMode.Bottom };
@@ -194,8 +194,8 @@ public sealed class NotchWindow : Window
         Left = Top = -20000;
         FontFamily = UI.Font;
         Foreground = UI.Text;
-        ThemeManager.AlwaysDark(Resources);
-        _accent = UI.Frozen(UI.Parse(_style.PanelColor, Color.FromRgb(0xFF, 0x6A, 0x1F)));
+        ThemeManager.Use(Resources);
+        _accent = UI.Accent;
 
         _context = new NotchContext
         {
@@ -299,7 +299,7 @@ public sealed class NotchWindow : Window
 
     void BuildShape()
     {
-        _body.Fill = Brushes.Black;
+        _body.Fill = UI.Background;
         _body.Stroke = UI.Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF));
         _canvas.Children.Add(_body);
     }
@@ -474,7 +474,7 @@ public sealed class NotchWindow : Window
         _panel.Margin = new Thickness(0);
 
         // Header: the tab's icon and name, today's date; colours, settings and close on the right.
-        var badge = new Border { Width = 28, Height = 28, CornerRadius = new CornerRadius(8), Background = Brushes.White, Child = _headGlyph };
+        var badge = new Border { Width = 28, Height = 28, CornerRadius = new CornerRadius(8), Background = UI.Text, Child = _headGlyph };
         _headTitle.Margin = new Thickness(11, 0, 0, 0);
         var divider = new Border { Width = 1, Height = 18, Background = UI.Faint, Margin = new Thickness(16, 0, 16, 0) };
         var left = new StackPanel { Orientation = Orientation.Horizontal, Children = { badge, _headTitle, divider, _headDate } };
@@ -501,7 +501,7 @@ public sealed class NotchWindow : Window
 
         var bar = new Border
         {
-            Background = UI.Frozen(Color.FromRgb(0x10, 0x10, 0x10)),
+            Background = UI.Card,
             BorderBrush = UI.CardEdge,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(26),
@@ -538,7 +538,7 @@ public sealed class NotchWindow : Window
         foreach (var id in ids)
         {
             var (_, title, glyph) = NotchPage.All.First(t => t.Id == id);
-            var icon = UI.Glyph(glyph, 14, UI.Frozen(Color.FromRgb(0xC8, 0xC8, 0xC8)));
+            var icon = UI.Glyph(glyph, 14, UI.Dim);
             var bg = new Border { Width = 38, Height = 38, CornerRadius = new CornerRadius(19), Background = Brushes.Transparent, Child = icon, Tag = id };
             var button = new Button { Content = bg, Template = UI.Bare(), Cursor = Cursors.Hand, Focusable = false, ToolTip = title, Margin = new Thickness(1, 0, 1, 0) };
             System.Windows.Automation.AutomationProperties.SetName(button, title);
@@ -590,8 +590,8 @@ public sealed class NotchWindow : Window
         {
             if (button.Content is not Border { Tag: string id } bg) continue;
             var on = _page?.Id == id;
-            bg.Background = on ? Brushes.White : Brushes.Transparent;
-            ((TextBlock)bg.Child).Foreground = on ? Brushes.Black : UI.Frozen(Color.FromRgb(0xC8, 0xC8, 0xC8));
+            bg.Background = on ? UI.Text : Brushes.Transparent;
+            ((TextBlock)bg.Child).Foreground = on ? UI.Background : UI.Dim;
         }
     }
 
@@ -636,16 +636,17 @@ public sealed class NotchWindow : Window
         static void Mark(WrapPanel row, string current)
         {
             foreach (var b in row.Children.OfType<Button>())
-                ((Border)b.Content).BorderBrush = string.Equals((string)b.Tag, current, StringComparison.OrdinalIgnoreCase) ? Brushes.White : Brushes.Transparent;
+                ((Border)b.Content).BorderBrush = string.Equals((string)b.Tag, current, StringComparison.OrdinalIgnoreCase) ? UI.Text : Brushes.Transparent;
         }
 
         Row("EDGE GLOW", () => _style.GlowColor, hex => { _style.GlowColor = hex; ApplyGlowColour(); });
-        Row("PANEL", () => _style.PanelColor, hex =>
+        // The accent is the theme's (Settings → Theme has the rest of the colours).
+        Row("ACCENT", () => ThemeManager.ToHex(ThemeManager.Current.Accent), hex =>
         {
-            _style.PanelColor = hex;
-            _accent = UI.Frozen(UI.Parse(hex, Colors.OrangeRed));
-            UpdateSide();
-            _page?.Refresh();
+            App.Settings.Theme.Colors["accent"] = hex;
+            App.Settings.Theme.WindowsAccent = false;
+            App.Settings.Save();
+            ThemeManager.Refresh(); // everything redraws in the new colour
         });
 
         var breathing = UI.Pill(BreathingText(), () => { });
@@ -671,7 +672,7 @@ public sealed class NotchWindow : Window
 
         return new Border
         {
-            Background = UI.Frozen(Color.FromRgb(0x18, 0x18, 0x18)),
+            Background = UI.Card,
             BorderBrush = UI.CardEdge,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(14),

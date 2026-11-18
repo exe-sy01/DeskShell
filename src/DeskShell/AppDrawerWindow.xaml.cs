@@ -97,7 +97,7 @@ public partial class AppDrawerWindow : Window
     public AppDrawerWindow(AppIndex apps)
     {
         InitializeComponent();
-        ThemeManager.AlwaysDark(Resources);
+        ThemeManager.Use(Resources);
         _apps = apps;
         Deactivated += (_, _) => CloseDrawer();
         ToolsMenu.Fill(ToolsButton.ContextMenu, CloseDrawer);

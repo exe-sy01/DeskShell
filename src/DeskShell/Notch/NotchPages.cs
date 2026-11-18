@@ -357,7 +357,7 @@ static class Avatars
 {
     public static readonly Brush Talking = UI.Frozen(Color.FromRgb(0x3B, 0xD1, 0x6F));
     static readonly Brush Muted = UI.Frozen(Color.FromRgb(0xE0, 0x3C, 0x3C));
-    static readonly Brush Blank = UI.Frozen(Color.FromRgb(0x2E, 0x2E, 0x2E));
+    static Brush Blank => UI.Raised;
 
     public static Grid Make(VoicePeer peer, double size, bool badge = true)
     {
@@ -378,7 +378,7 @@ static class Avatars
             var b = size * 0.36;
             root.Children.Add(new Border
             {
-                Width = b, Height = b, CornerRadius = new CornerRadius(b / 2), Background = Muted, BorderBrush = Brushes.Black, BorderThickness = new Thickness(1.5),
+                Width = b, Height = b, CornerRadius = new CornerRadius(b / 2), Background = Muted, BorderBrush = UI.Background, BorderThickness = new Thickness(1.5),
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
                 Child = UI.Glyph(peer.Deafened ? "" : "", b * 0.5)
             });

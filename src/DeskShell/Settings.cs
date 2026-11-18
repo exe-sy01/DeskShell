@@ -122,6 +122,20 @@ public sealed class IslandStyle
     [JsonIgnore] public double ReservedHeight => TopGap + Height + 6;
 }
 
+/// <summary>One look for everything DeskShell draws: the notch, drawer, shell, File Explorer, Task Manager and settings.</summary>
+public sealed class ThemeSettings
+{
+    /// <summary>"black", "graphite", "light" or "windows" (follows Windows' light/dark mode).</summary>
+    public string Preset { get; set; } = "black";
+    /// <summary>Use Windows' accent colour (otherwise the preset's or your own).</summary>
+    public bool WindowsAccent { get; set; }
+    /// <summary>
+    /// Your own colours over the preset, by name: background, card, raised, edge, text, textDim, accent.
+    /// Each is #RRGGBB or #AARRGGBB. Anything not listed comes from the preset.
+    /// </summary>
+    public Dictionary<string, string> Colors { get; set; } = new();
+}
+
 /// <summary>The notch: a small clock at the top edge that grows into the Home panel when you rest the mouse on it.</summary>
 public sealed class NotchStyle
 {
@@ -176,6 +190,7 @@ public sealed class Settings
     /// <summary>"notch" (a small clock that grows into the Home panel) or "pill" (the classic island with pages).</summary>
     public string IslandLook { get; set; } = "notch";
     public NotchStyle Notch { get; set; } = new();
+    public ThemeSettings Theme { get; set; } = new();
 
     [JsonIgnore] public bool UseNotch => IslandLook == "notch";
 
@@ -289,6 +304,19 @@ public sealed class Settings
         return fresh;
     }
 
+    /// <summary>Reads the settings without changing the file (for DeskShell's other processes, like the file explorer).</summary>
+    public static Settings? ReadOnly()
+    {
+        try
+        {
+            return File.Exists(FilePath) ? JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath), JsonOptions) : null;
+        }
+        catch
+        {
+            return null; // being written right now; the caller tries again later
+        }
+    }
+
     void Migrate()
     {
         // The island replaced the dock: switch the dock off once (it can be turned back on).
@@ -303,6 +331,12 @@ public sealed class Settings
         {
             Migrations.Add("notch");
             IslandLook = "notch";
+        }
+        // The theme took over the notch's panel colour.
+        if (!Migrations.Contains("theme"))
+        {
+            Migrations.Add("theme");
+            if (!string.Equals(Notch.PanelColor, "#FF6A1F", StringComparison.OrdinalIgnoreCase)) Theme.Colors["accent"] = Notch.PanelColor;
         }
         // The notch's Windows tab came later: put it next to Home.
         if (!Migrations.Contains("notch-windows"))

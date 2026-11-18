@@ -83,9 +83,6 @@ public partial class App : Application
 
         base.OnStartup(e);
         Log.Info("Starting DeskShell");
-        ThemeManager.Start();
-        // Tiles are built in code from the current colours; rebuild them when Windows' theme or accent changes.
-        ThemeManager.Changed += () => _shellWindow?.RebuildTiles();
 
         // Creating %LOCALAPPDATA%\DeskShell\debug turns on ManagedShell's detailed log, for bug hunting.
         var logFolder = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DeskShell");
@@ -97,6 +94,14 @@ public partial class App : Application
             ManagedShell.Common.Logging.ShellLogger.Attach(fileLog, false);
         }
         Settings = Settings.Load();
+        ThemeManager.Start(); // after the settings: the theme is in them
+        // Tiles are built in code from the current colours; rebuild them when the theme changes.
+        ThemeManager.Changed += () =>
+        {
+            _shellWindow?.RebuildTiles();
+            // The notch builds its panel in code from the theme's colours; make it afresh.
+            if (_notches.Count > 0) RebuildBars("theme changed");
+        };
 
         var config = ShellManager.DefaultShellConfig;
         config.EnableTasksService = true;
@@ -264,6 +269,7 @@ public partial class App : Application
         if (!updated.ActiveWindowBorder) _border?.Reset();
         Settings = updated;
         Settings.Save();
+        ThemeManager.Refresh();
 
         RegisterHotkeys();
         if (_altTab != null)

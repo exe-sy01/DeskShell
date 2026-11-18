@@ -43,7 +43,14 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="28,4,22,28">
             <StackPanel MaxWidth="680" HorizontalAlignment="Left">
 
-                <TextBlock Style="{StaticResource Section}" Text="General" Margin="0,16,0,4" />
+                <TextBlock Style="{StaticResource Section}" Text="Theme" Margin="0,16,0,4" />
+                <TextBlock Style="{StaticResource Note}" Text="One look for the notch, app drawer, shell, File Explorer, Task Manager and this window. Pick a starting point, then change any colour you like: changes show straight away, and stay once you press Save." />
+                <WrapPanel x:Name="ThemePresets" Margin="0,0,0,6" />
+                <CheckBox x:Name="ThemeWindowsAccent" Style="{StaticResource Switch}" Content="Use Windows' accent colour" Margin="0,4,0,10" Click="ThemeWindowsAccent_Click" />
+                <StackPanel x:Name="ThemeColours" />
+                <Button Style="{StaticResource PillButton}" Tag="&#xE72C;" Content="Back to the preset's colours" HorizontalAlignment="Left" Margin="0,10,0,0" Click="ResetTheme_Click" />
+
+                <TextBlock Style="{StaticResource Section}" Text="General" />
                 <TextBlock Style="{StaticResource Note}" Text="Hotkeys are written like Alt+Space, Ctrl+Alt+Up or Win+Shift+S. A hotkey another app already uses won't work; DeskShell's log says which." />
                 <CheckBox x:Name="StartWithWindows" Style="{StaticResource Switch}" Content="Start DeskShell when I sign in to Windows" Margin="0,4,0,10" />
                 <CheckBox x:Name="WinKeyOpensDrawer" Style="{StaticResource Switch}" Content="Windows key opens the app drawer instead of the Start menu" Margin="0,0,0,10" />

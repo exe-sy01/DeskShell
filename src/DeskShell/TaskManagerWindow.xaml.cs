@@ -45,7 +45,7 @@ public partial class TaskManagerWindow : Window
 
     public TaskManagerWindow()
     {
-        ThemeManager.AlwaysDark(Resources);
+        ThemeManager.Use(Resources);
         InitializeComponent();
         SourceInitialized += (_, _) =>
         {

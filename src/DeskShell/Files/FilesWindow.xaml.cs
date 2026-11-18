@@ -34,7 +34,7 @@ public partial class FilesWindow : Window
 
     public FilesWindow()
     {
-        ThemeManager.AlwaysDark(Resources);
+        ThemeManager.Use(Resources);
         InitializeComponent();
         var prefs = FileView.Prefs;
         Width = Math.Max(MinWidth, prefs.Width);

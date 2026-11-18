@@ -37,7 +37,7 @@ public partial class ShellWindow : Window
     public ShellWindow(ShellManager shell, AppIndex apps, ClipboardHistory clipboard, MediaService media)
     {
         InitializeComponent();
-        ThemeManager.AlwaysDark(Resources);
+        ThemeManager.Use(Resources);
 
         var toggles = new SystemToggles();
         _context = new ShellContext

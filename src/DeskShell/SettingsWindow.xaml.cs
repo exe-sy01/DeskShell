@@ -62,6 +62,160 @@ public partial class SettingsWindow : Window
         ZoneGap.Text = _draft.ZoneGap.ToString(CultureInfo.InvariantCulture);
         BuildMonitorLayouts();
         BuildRules();
+        BuildTheme();
+        // Closing without saving puts the saved theme back.
+        Closed += (_, _) => { if (!_themeSaved) ThemeManager.Refresh(); };
+    }
+
+    // ---------- theme ----------
+
+    bool _themeSaved;
+    readonly Dictionary<string, (Border Swatch, TextBox Hex)> _themeRows = new();
+    bool _fillingTheme;
+
+    void BuildTheme()
+    {
+        ThemePresets.Children.Clear();
+        var chips = new List<ToggleButton>();
+        foreach (var (key, label) in ThemeManager.PresetNames)
+        {
+            var chip = new ToggleButton { Style = (Style)FindResource("ChipButton"), Content = label, IsChecked = _draft.Theme.Preset == key, Margin = new Thickness(0, 0, 6, 6) };
+            // Checked (not Click), so keyboard and screen readers pick presets too.
+            chip.Checked += (_, _) =>
+            {
+                if (_draft.Theme.Preset == key) return;
+                _draft.Theme.Preset = key;
+                foreach (var other in chips) if (other != chip) other.IsChecked = false;
+                ShowThemeColours();
+                PreviewTheme();
+            };
+            chip.Unchecked += (_, _) => { if (_draft.Theme.Preset == key) chip.IsChecked = true; }; // one is always picked
+            chips.Add(chip);
+            ThemePresets.Children.Add(chip);
+        }
+        ThemeWindowsAccent.IsChecked = _draft.Theme.WindowsAccent;
+
+        ThemeColours.Children.Clear();
+        _themeRows.Clear();
+        foreach (var (role, label) in ThemeManager.Roles)
+        {
+            var grid = new Grid { Margin = new Thickness(0, 3, 0, 3) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var name = new TextBlock { Text = label, Style = (Style)FindResource("Label") };
+            var swatch = new Border { Width = 28, Height = 28, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Cursor = System.Windows.Input.Cursors.Hand, ToolTip = "Pick a colour" };
+            swatch.SetResourceReference(Border.BorderBrushProperty, "StrongEdgeBrush");
+            var hex = new TextBox { Style = (Style)FindResource("Field"), ToolTip = "#RRGGBB, or #AARRGGBB for see-through" };
+            var reset = new Button { Style = (Style)FindResource("GhostButton"), ToolTip = "Back to the preset's colour", Margin = new Thickness(6, 0, 0, 0),
+                Content = new TextBlock { Text = "", Style = (Style)FindResource("Icon"), FontSize = 12 } };
+            Grid.SetColumn(swatch, 1);
+            Grid.SetColumn(hex, 2);
+            Grid.SetColumn(reset, 3);
+            grid.Children.Add(name);
+            grid.Children.Add(swatch);
+            grid.Children.Add(hex);
+            grid.Children.Add(reset);
+            ThemeColours.Children.Add(grid);
+            _themeRows[role] = (swatch, hex);
+
+            var r = role;
+            hex.TextChanged += (_, _) =>
+            {
+                if (_fillingTheme || !ThemeManager.TryParse(hex.Text, out var colour)) return;
+                _draft.Theme.Colors[r] = ThemeManager.ToHex(colour);
+                if (r == "accent") ThemeWindowsAccent.IsChecked = _draft.Theme.WindowsAccent = false;
+                swatch.Background = new SolidColorBrush(colour);
+                PreviewTheme();
+            };
+            reset.Click += (_, _) =>
+            {
+                _draft.Theme.Colors.Remove(r);
+                ShowThemeColours();
+                PreviewTheme();
+            };
+            swatch.MouseLeftButtonUp += (_, _) => PickColour(swatch, hex);
+        }
+        ShowThemeColours();
+    }
+
+    /// <summary>Each colour box shows your own colour, or the preset's.</summary>
+    void ShowThemeColours()
+    {
+        _fillingTheme = true;
+        var p = ThemeManager.Resolve(_draft.Theme);
+        foreach (var (role, (swatch, hex)) in _themeRows)
+        {
+            var colour = role switch
+            {
+                "background" => p.Background, "card" => p.Card, "raised" => p.Raised, "edge" => p.Edge,
+                "text" => p.Text, "textDim" => p.TextDim, _ => p.Accent
+            };
+            hex.Text = ThemeManager.ToHex(colour);
+            hex.FontWeight = _draft.Theme.Colors.ContainsKey(role) ? FontWeights.SemiBold : FontWeights.Normal;
+            swatch.Background = new SolidColorBrush(colour);
+        }
+        _fillingTheme = false;
+    }
+
+    void PreviewTheme()
+    {
+        _themeSaved = false;
+        ThemeManager.Preview(_draft.Theme);
+    }
+
+    void ThemeWindowsAccent_Click(object sender, RoutedEventArgs e)
+    {
+        _draft.Theme.WindowsAccent = ThemeWindowsAccent.IsChecked == true;
+        if (_draft.Theme.WindowsAccent) _draft.Theme.Colors.Remove("accent");
+        ShowThemeColours();
+        PreviewTheme();
+    }
+
+    void ResetTheme_Click(object sender, RoutedEventArgs e)
+    {
+        _draft.Theme.Colors.Clear();
+        ShowThemeColours();
+        PreviewTheme();
+    }
+
+    /// <summary>A small palette under the swatch: greys and a range of hues in four shades.</summary>
+    void PickColour(Border swatch, TextBox hex)
+    {
+        var grid = new UniformGrid { Columns = 10 };
+        var colours = new List<Color>();
+        for (var i = 0; i < 10; i++) colours.Add(Color.FromRgb((byte)(i * 255 / 9), (byte)(i * 255 / 9), (byte)(i * 255 / 9)));
+        double[] hues = [0, 20, 40, 60, 120, 165, 195, 215, 265, 300];
+        foreach (var (s, l) in new[] { (0.9, 0.82), (0.85, 0.65), (0.9, 0.5), (0.75, 0.33), (0.6, 0.18) })
+            foreach (var h in hues) colours.Add(FromHsl(h, s, l));
+        var popup = new Popup { PlacementTarget = swatch, Placement = PlacementMode.Bottom, StaysOpen = false, AllowsTransparency = true };
+        foreach (var c in colours)
+        {
+            var dot = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Margin = new Thickness(3), Background = new SolidColorBrush(c), Cursor = System.Windows.Input.Cursors.Hand };
+            dot.MouseLeftButtonUp += (_, _) =>
+            {
+                hex.Text = ThemeManager.ToHex(c);
+                popup.IsOpen = false;
+            };
+            grid.Children.Add(dot);
+        }
+        var box = new Border { Padding = new Thickness(8), CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1), Child = grid, Margin = new Thickness(0, 6, 0, 0) };
+        box.SetResourceReference(Border.BackgroundProperty, "CardBrush");
+        box.SetResourceReference(Border.BorderBrushProperty, "EdgeBrush");
+        popup.Child = box;
+        popup.IsOpen = true;
+    }
+
+    static Color FromHsl(double h, double s, double l)
+    {
+        double C(double n)
+        {
+            var k = (n + h / 30) % 12;
+            var a = s * Math.Min(l, 1 - l);
+            return l - a * Math.Max(-1, Math.Min(Math.Min(k - 3, 9 - k), 1));
+        }
+        return Color.FromRgb((byte)Math.Round(C(0) * 255), (byte)Math.Round(C(8) * 255), (byte)Math.Round(C(4) * 255));
     }
 
     // ---------- per-monitor zone layouts ----------
@@ -239,6 +393,7 @@ public partial class SettingsWindow : Window
         _draft.DockPins = App.Settings.DockPins;
         _draft.RecentApps = App.Settings.RecentApps;
         App.Instance.ApplySettings(_draft.Clone());
+        _themeSaved = true;
         Status.Text = "Saved";
     }
 

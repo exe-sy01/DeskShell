@@ -110,7 +110,7 @@ public partial class IslandWindow : Window
     public IslandWindow(ShellManager shell, AppBarScreen screen, MediaService media, AppIndex apps)
     {
         InitializeComponent();
-        ThemeManager.AlwaysDark(Resources);
+        ThemeManager.Use(Resources);
         _shell = shell;
         Screen = screen;
         _media = media;

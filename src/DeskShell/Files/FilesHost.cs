@@ -164,6 +164,7 @@ public static class FilesHost
 public sealed class FilesApp : Application
 {
     readonly List<FilesWindow> _windows = new();
+    FileSystemWatcher? _settingsWatcher;
     FilesWindow? _lastActive;
     DispatcherTimer? _idle;
 
@@ -187,9 +188,28 @@ public sealed class FilesApp : Application
 
     public void Begin(FilesHost.Request first, string pipeName)
     {
+        // This process doesn't own the settings: read the theme from the file, and follow it when it's saved.
+        ThemeSettings? lastTheme = null;
+        ThemeManager.Source = () => lastTheme = Settings.ReadOnly()?.Theme ?? lastTheme ?? new ThemeSettings();
         ThemeManager.Start();
+        try
+        {
+            var watcher = new FileSystemWatcher(Settings.Folder, "settings.json") { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size, EnableRaisingEvents = true };
+            var debounce = new DispatcherTimer(TimeSpan.FromMilliseconds(400), DispatcherPriority.Background, (s, _) =>
+            {
+                ((DispatcherTimer)s!).Stop();
+                ThemeManager.Refresh();
+            }, Dispatcher);
+            debounce.Stop();
+            watcher.Changed += (_, _) => Dispatcher.BeginInvoke(() => { debounce.Stop(); debounce.Start(); });
+            _settingsWatcher = watcher;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Can't follow theme changes", ex);
+        }
         // Like the island, the explorer is always dark; menus opened from code use these app-wide colours.
-        ThemeManager.AlwaysDark(Resources);
+        ThemeManager.Use(Resources);
         ShellNative.UseDarkMenus();
         FileView.Load();
         Handle(first);
