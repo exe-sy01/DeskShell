@@ -18,6 +18,11 @@ public sealed class FilesPreferences
     public double Height { get; set; } = 700;
     public bool Maximized { get; set; }
     public double SidebarWidth { get; set; } = 220;
+    /// <summary>"preview", "details" or null: the panel on the right.</summary>
+    public string? SidePanel { get; set; }
+    public double SidePanelWidth { get; set; } = 320;
+    /// <summary>Work out folders' sizes in the details list (in the background).</summary>
+    public bool FolderSizes { get; set; }
     /// <summary>Folders that remember the grid view (pictures and so on), by path.</summary>
     public List<string> TileFolders { get; set; } = new();
     public List<string> DetailFolders { get; set; } = new();

@@ -87,8 +87,8 @@ public partial class FilesWindow : Window
     void OnSourceInitialized(object? sender, EventArgs e)
     {
         _hwnd = new WindowInteropHelper(this).Handle;
-        var on = 1;
-        WmNative.DwmSetWindowAttribute(_hwnd, 20, ref on, sizeof(int)); // dark frame
+        var on = ThemeManager.IsDark ? 1 : 0;
+        WmNative.DwmSetWindowAttribute(_hwnd, 20, ref on, sizeof(int)); // frame follows the theme
         var round = 2;
         WmNative.DwmSetWindowAttribute(_hwnd, 33, ref round, sizeof(int)); // rounded corners, Windows 11
         var source = HwndSource.FromHwnd(_hwnd);
@@ -99,6 +99,7 @@ public partial class FilesWindow : Window
             return IntPtr.Zero;
         });
         FitMaximized();
+        RestorePanels();
     }
 
     void FitMaximized()
@@ -329,7 +330,21 @@ public partial class FilesWindow : Window
 
     FileComparer Comparer => new(FileView.Prefs.SortBy, FileView.Prefs.SortDescending);
 
+    /// <summary>Loads a tab's folder; a failure is logged rather than lost in a fire-and-forget task.</summary>
     async Task LoadAsync(FolderTab tab, string? select, bool keepView = false)
+    {
+        try
+        {
+            await LoadCoreAsync(tab, select, keepView);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Couldn't show {tab.Location}", ex);
+            if (tab == _tab) Status.Text = "Couldn't show this folder: " + ex.Message;
+        }
+    }
+
+    async Task LoadCoreAsync(FolderTab tab, string? select, bool keepView)
     {
         tab.Loading?.Cancel();
         var cancel = new CancellationTokenSource();
@@ -390,7 +405,11 @@ public partial class FilesWindow : Window
             tab.Selection.Clear();
         }
         if (select != null) tab.Selection = new List<string> { select };
-        if (tab == _tab) ShowLocation(restore: true);
+        if (tab == _tab)
+        {
+            ShowLocation(restore: true);
+            MeasureFolders();
+        }
     }
 
     /// <summary>Lists a folder; an empty result is checked, as an unreadable folder also reads as empty.</summary>
@@ -978,7 +997,11 @@ public partial class FilesWindow : Window
     /// <summary>Where new files go: the folder on screen (not Home or search results).</summary>
     string? CurrentFolder => _tab.Location == Home ? null : _tab.Location;
 
-    void List_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateStatus();
+    void List_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateStatus();
+        SchedulePreview();
+    }
 
     void OpenItems(IReadOnlyList<FileItem> items, bool newTab = false)
     {
@@ -1452,18 +1475,86 @@ public partial class FilesWindow : Window
         else if (container != null && !container.IsSelected) SelectOnly((FileItem)container.DataContext);
         var items = Selected;
 
-        // Shift+right-click goes straight to Windows' full menu, like Explorer.
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        // One menu: Windows' own (with 7-Zip, Open with, Send to…) and DeskShell's commands at the top.
+        // Shift+right-click adds Windows' extended commands, like Explorer.
+        e.Handled = true;
+        ShowShellMenu(items, extended: Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
+    }
+
+    /// <summary>DeskShell's own commands for the selection, shown above Windows' in the one right-click menu.</summary>
+    List<ShellMenu.Extra> ItemExtras(List<FileItem> items)
+    {
+        var extras = new List<ShellMenu.Extra>();
+        var one = items.Count == 1 ? items[0] : null;
+        var folders = items.All(i => i.IsFolder);
+        if (folders)
         {
-            e.Handled = true;
-            ShowShellMenu(items, extended: true);
-            return;
+            extras.Add(new("Open in new tab", () => { foreach (var f in items) OpenTab(f.Path); }));
+            extras.Add(new("Open in new window", () => { foreach (var f in items.Take(5)) FilesHost.App?.OpenWindow(f.Path); }));
         }
-        var menu = List.ContextMenu!;
-        menu.Items.Clear();
-        if (items.Count == 0) FillBackgroundMenu(menu);
-        else FillItemMenu(menu, items);
-        if (menu.Items.Count == 0) e.Handled = true;
+        if (one is { IsFolder: false }) extras.Add(new("Quick Look\tSpace", () => QuickLook(one)));
+        if (_tab.SearchQuery != null && one != null) extras.Add(new("Open file location", () => Navigate(one.Folder, select: one.Path)));
+        extras.Add(new("Copy as path\tCtrl+Shift+C", () => CopyPaths(items.Select(i => i.Path))));
+        extras.Add(ShellMenu.Extra.Separator);
+        extras.Add(new("Compress to ZIP", () => CompressItems(items)));
+        if (one != null && Archive.IsZip(one.Path)) extras.Add(new("Extract here", () => ExtractZip(one.Path)));
+        if (items.Count > 1) extras.Add(new("Rename all…", () => BatchRename(items)));
+        if (one is { IsFolder: true })
+        {
+            extras.Add(ShellMenu.Extra.Separator);
+            var pinned = FileView.IsPinned(one.Path);
+            extras.Add(new(pinned ? "Unpin from sidebar" : "Pin to sidebar", () => FileView.SetPinned(one.Path, !pinned)));
+            extras.Add(new("Open in Terminal", () => FileOps.TerminalHere(one.Path)));
+            if (_dual != null) extras.Add(new("Open in the other pane", () => _ = OtherPaneOpen(one.Path)));
+        }
+        return extras;
+    }
+
+    /// <summary>DeskShell's commands for the folder's background: view, sort, new, terminal, pin.</summary>
+    List<ShellMenu.Extra> BackgroundExtras(string folder)
+    {
+        var prefs = FileView.Prefs;
+        var view = new List<ShellMenu.Extra>
+        {
+            new("Details", () => SetView(false), Checked: !_tab.Tiles),
+            new("Tiles", () => SetView(true), Checked: _tab.Tiles),
+            ShellMenu.Extra.Separator,
+            new("Hidden items", () => { FileView.Prefs.ShowHidden = !FileView.ShowHidden; FileView.Save(); RefreshNow(); }, Checked: FileView.ShowHidden),
+            new("File name extensions", ToggleExtensions, Checked: FileView.ShowExtensions),
+            ShellMenu.Extra.Separator,
+            new("Preview pane", () => SetSidePanel(_sidePanel == "preview" ? null : "preview"), Checked: _sidePanel == "preview"),
+            new("Details pane", () => SetSidePanel(_sidePanel == "details" ? null : "details"), Checked: _sidePanel == "details"),
+            new("Two panes", ToggleDual, Checked: _dual != null),
+            new("Folder sizes", ToggleFolderSizes, Checked: prefs.FolderSizes)
+        };
+        var sort = new List<ShellMenu.Extra>();
+        foreach (var (key, label) in new[] { ("Name", "Name"), ("Modified", "Date modified"), ("Type", "Type"), ("Size", "Size") })
+            sort.Add(new(label, () => { prefs.SortBy = key; prefs.SortDescending = key is "Modified" or "Size"; ApplySort(); }, Checked: prefs.SortBy == key));
+        sort.Add(ShellMenu.Extra.Separator);
+        sort.Add(new("Ascending", () => { prefs.SortDescending = false; ApplySort(); }, Checked: !prefs.SortDescending));
+        sort.Add(new("Descending", () => { prefs.SortDescending = true; ApplySort(); }, Checked: prefs.SortDescending));
+        var pinned = FileView.IsPinned(folder);
+        return
+        [
+            new("View", Children: view),
+            new("Sort by", Children: sort),
+            new("Refresh\tF5", RefreshNow),
+            ShellMenu.Extra.Separator,
+            new("New folder\tCtrl+Shift+N", NewFolder),
+            new("New text document", NewTextFile),
+            ShellMenu.Extra.Separator,
+            new("Open in Terminal", () => FileOps.TerminalHere(folder)),
+            new(pinned ? "Unpin from sidebar" : "Pin to sidebar", () => FileView.SetPinned(folder, !pinned))
+        ];
+    }
+
+    void ToggleExtensions()
+    {
+        FileView.Prefs.ShowExtensions = !FileView.ShowExtensions;
+        FileView.Save();
+        foreach (var tab in _tabs)
+        foreach (var item in tab.Items)
+            item.RefreshName();
     }
 
     void FillItemMenu(ContextMenu menu, List<FileItem> items)
@@ -1566,7 +1657,7 @@ public partial class FilesWindow : Window
                 default:
                     return false;
             }
-        });
+        }, items.Count > 0 ? ItemExtras(items) : BackgroundExtras(folder));
     }
 
     // ---------- keyboard and mouse ----------
@@ -1609,6 +1700,11 @@ public partial class FilesWindow : Window
             if (index < _tabs.Count) Handle(() => ActivateTab(_tabs[index]));
             return;
         }
+        if (alt && key == Key.P) { Handle(() => SetSidePanel(_sidePanel == "preview" ? null : "preview")); return; }
+        if (mods == (ModifierKeys.Alt | ModifierKeys.Shift) && key == Key.P) { Handle(() => SetSidePanel(_sidePanel == "details" ? null : "details")); return; }
+        if (ctrl && key == Key.Oem5) { Handle(ToggleDual); return; }
+        // With two panes, F5 copies and F6 moves the selection to the other pane (like file commanders).
+        if (_dual != null && List.IsKeyboardFocusWithin && mods == ModifierKeys.None && key is Key.F5 or Key.F6) { Handle(() => TransferToOther(Selected.Select(i => i.Path).ToList(), move: key == Key.F6)); return; }
         if (key == Key.F5 || ctrl && key == Key.R) { Handle(RefreshNow); return; }
         if (ctrlShift && key == Key.N) { Handle(NewFolder); return; }
         if (ctrlShift && key == Key.D6) { Handle(() => SetView(false)); return; }
@@ -1630,6 +1726,7 @@ public partial class FilesWindow : Window
         if (ctrl && key == Key.V) { Handle(() => Paste()); return; }
         if (ctrlShift && key == Key.C) { Handle(() => CopyPaths(items.Select(i => i.Path))); return; }
         if (ctrl && key == Key.A) { Handle(() => List.SelectAll()); return; }
+        if (key == Key.Space && mods == ModifierKeys.None && items.Count == 1) { Handle(() => QuickLook(items[0])); return; }
         if (key == Key.Escape && mods == ModifierKeys.None)
         {
             if (_tab.SearchQuery != null || _tab.Filter.Length > 0) Handle(() => SearchBox.Text = "");

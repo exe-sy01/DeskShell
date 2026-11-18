@@ -34,7 +34,13 @@ public sealed class FileItem : INotifyPropertyChanged
     /// <summary>The name as shown: without the extension if file extensions are hidden.</summary>
     public string DisplayName => IsFolder || FileView.ShowExtensions || Extension.Length == 0 ? Name : System.IO.Path.GetFileNameWithoutExtension(Name);
     public string ModifiedText => Modified == default ? "" : Modified.ToString("g");
-    public string SizeText => IsFolder ? "" : FormatSize(Size);
+    public string SizeText => IsFolder ? _folderBytes is { } bytes ? FormatSize(bytes) : _measuring ? "…" : "" : FormatSize(Size);
+
+    long? _folderBytes;
+    bool _measuring;
+    /// <summary>A folder's total size, once worked out (View → Folder sizes).</summary>
+    public long? FolderBytes { get => _folderBytes; set { _folderBytes = value; _measuring = false; OnChanged(); OnChanged(nameof(SizeText)); } }
+    public bool Measuring { get => _measuring; set { _measuring = value; OnChanged(nameof(SizeText)); } }
 
     string? _typeName;
     /// <summary>"File folder", "Text Document"…; in search results, where it was found.</summary>

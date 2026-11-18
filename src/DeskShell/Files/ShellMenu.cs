@@ -42,26 +42,50 @@ public static class ShellMenu
         return IntPtr.Zero;
     }
 
+    /// <summary>One of DeskShell's own commands added to Windows' menu. "-" makes a separator; Children a submenu.</summary>
+    public sealed record Extra(string Text, Action? Run = null, bool Enabled = true, bool Checked = false, IReadOnlyList<Extra>? Children = null)
+    {
+        public static readonly Extra Separator = new("-");
+    }
+
+    const int FirstExtraId = 0x8000; // the shell's own commands use 1–0x7FFF
+
     /// <summary>
     /// Shows the menu for <paramref name="items"/> (all in one folder), or for <paramref name="folder"/>'s
-    /// background if there are none. <paramref name="ownVerb"/> gets first say on the chosen verb
-    /// ("rename", "open"…) and returns true if it handled it.
+    /// background if there are none, with <paramref name="extras"/> (DeskShell's own commands) at the top:
+    /// one menu with everything, including what apps like 7-Zip add. <paramref name="ownVerb"/> gets
+    /// first say on a chosen Windows verb ("rename", "open"…) and returns true if it handled it.
     /// </summary>
-    public static void Show(IntPtr hwnd, string folder, IReadOnlyList<string> items, Point screen, bool extended, Func<string, bool> ownVerb)
+    public static void Show(IntPtr hwnd, string folder, IReadOnlyList<string> items, Point screen, bool extended, Func<string, bool> ownVerb,
+        IReadOnlyList<Extra>? extras = null)
     {
         using var menu = Create(hwnd, folder, items);
         if (menu == null) return;
         var popup = CreatePopupMenu();
+        var actions = new Dictionary<int, Action>();
+        var submenus = new List<IntPtr>();
         try
         {
             var flags = CMF_NORMAL | CMF_EXPLORE | (items.Count > 0 ? CMF_CANRENAME : 0) | (extended ? CMF_EXTENDEDVERBS : 0);
             if (menu.Menu.QueryContextMenu(popup, 0, 1, 0x7FFF, flags) < 0) return;
+            if (extras is { Count: > 0 })
+            {
+                var position = 0u;
+                var nextId = FirstExtraId;
+                foreach (var extra in extras) Insert(popup, position++, extra, ref nextId, actions, submenus);
+                InsertMenuW(popup, position, MF_BYPOSITION | MF_SEPARATOR, UIntPtr.Zero, null);
+            }
             _menu2 = menu.Menu as IContextMenu2;
             _menu3 = menu.Menu as IContextMenu3;
             int chosen;
             try { chosen = TrackPopupMenuEx(popup, TPM_RETURNCMD | TPM_RIGHTBUTTON, (int)screen.X, (int)screen.Y, hwnd, IntPtr.Zero); }
             finally { _menu2 = null; _menu3 = null; }
             if (chosen <= 0) return;
+            if (actions.TryGetValue(chosen, out var run))
+            {
+                run();
+                return;
+            }
             var verb = Verb(menu.Menu, chosen - 1);
             if (verb != null && ownVerb(verb)) return;
             Invoke(menu.Menu, hwnd, folder, new IntPtr(chosen - 1), IntPtr.Zero, screen);
@@ -72,9 +96,36 @@ public static class ShellMenu
         }
         finally
         {
-            DestroyMenu(popup);
+            DestroyMenu(popup); // destroys the submenus inserted into it too
         }
     }
+
+    static void Insert(IntPtr menu, uint position, Extra extra, ref int nextId, Dictionary<int, Action> actions, List<IntPtr> submenus)
+    {
+        if (extra.Text == "-")
+        {
+            InsertMenuW(menu, position, MF_BYPOSITION | MF_SEPARATOR, UIntPtr.Zero, null);
+            return;
+        }
+        var state = (extra.Enabled ? 0u : MF_GRAYED) | (extra.Checked ? MF_CHECKED : 0u);
+        if (extra.Children is { Count: > 0 } children)
+        {
+            var sub = CreatePopupMenu();
+            submenus.Add(sub);
+            var i = 0u;
+            foreach (var child in children) Insert(sub, i++, child, ref nextId, actions, submenus);
+            InsertMenuW(menu, position, MF_BYPOSITION | MF_POPUP | state, (UIntPtr)(ulong)sub, extra.Text);
+            return;
+        }
+        var id = nextId++;
+        if (extra.Run != null) actions[id] = extra.Run;
+        InsertMenuW(menu, position, MF_BYPOSITION | MF_STRING | state, (UIntPtr)(uint)id, extra.Text);
+    }
+
+    const uint MF_STRING = 0, MF_GRAYED = 0x1, MF_CHECKED = 0x8, MF_POPUP = 0x10, MF_BYPOSITION = 0x400, MF_SEPARATOR = 0x800;
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    static extern bool InsertMenuW(IntPtr menu, uint position, uint flags, UIntPtr idOrSubmenu, string? text);
 
     /// <summary>Runs one of the menu's commands by name, e.g. "openas" (Open with) or "properties".</summary>
     public static void InvokeVerb(IntPtr hwnd, string folder, IReadOnlyList<string> items, string verb)
