@@ -156,6 +156,8 @@ public sealed class NotchStyle
     public double PopupSeconds { get; set; } = 6;
     /// <summary>Switch off Windows' own banners for every app while DeskShell runs (they'd show twice otherwise).</summary>
     public bool HideWindowsBanners { get; set; }
+    /// <summary>The Notifications tab's Clear: anything that arrived before this is left off its list.</summary>
+    public DateTime NotificationsCleared { get; set; }
     public int FocusMinutes { get; set; } = 25;
     public int BreakMinutes { get; set; } = 5;
 }
@@ -359,6 +361,12 @@ public sealed class Settings
                 var claude = Notch.Tabs.IndexOf("claude");
                 Notch.Tabs.Insert(claude >= 0 ? claude + 1 : Math.Min(1, Notch.Tabs.Count), "sage");
             }
+        }
+        // The Notifications tab: right after Home.
+        if (!Migrations.Contains("notch-notifications"))
+        {
+            Migrations.Add("notch-notifications");
+            if (!Notch.Tabs.Contains("notifications")) Notch.Tabs.Insert(Math.Min(1, Notch.Tabs.Count), "notifications");
         }
     }
 

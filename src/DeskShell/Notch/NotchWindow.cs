@@ -258,7 +258,13 @@ public sealed class NotchWindow : Window
     void OnToast(ToastItem item) => Dispatcher.BeginInvoke(() =>
     {
         var app = _context.Apps.Find(item.AppId);
-        ShowPop(app?.Icon, false, app != null ? $"{app.Name} · {item.Title}" : item.Title, item.Body, ManagedShell.Common.Helpers.ShellHelper.ShowNotificationCenter);
+        ShowPop(app?.Icon, false, app != null ? $"{app.Name} · {item.Title}" : item.Title, item.Body, OpenNotifications);
+    });
+
+    void OpenNotifications() => Dispatcher.BeginInvoke(() =>
+    {
+        Expand();
+        ShowTab("notifications");
     });
 
     /// <summary>Discord DMs and mentions (from the AIChat plugin); ones Discord marks quiet only go to the list.</summary>
