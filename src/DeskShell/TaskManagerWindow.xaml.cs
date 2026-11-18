@@ -33,11 +33,13 @@ public partial class TaskManagerWindow : Window
     readonly Dictionary<(int, long), TaskRow> _processes = new();
     readonly Dictionary<string, TaskRow> _sections = new();
     readonly HashSet<string> _expanded = new();
-    readonly List<Meter> _meters;
+    readonly Tasks.PerformancePage _performance = new() { Margin = new Thickness(4, 4, 4, 8) };
+    Tasks.StartupPage? _startup;
+    Tasks.ServicesPage? _services;
     readonly int _ownPid = Environment.ProcessId;
     readonly SolidColorBrush[] _heat = new SolidColorBrush[11];
     MachineSample? _last;
-    bool _sampling, _closed, _startupLoaded;
+    bool _sampling, _closed;
     string _sort = "Name";
     bool _descending;
     TaskRow? _armed;
@@ -50,10 +52,11 @@ public partial class TaskManagerWindow : Window
         SourceInitialized += (_, _) =>
         {
             var hwnd = new WindowInteropHelper(this).Handle;
-            var dark = 1;
-            WmNative.DwmSetWindowAttribute(hwnd, 20, ref dark, sizeof(int)); // dark title bar
-            uint black = 0;
-            WmNative.DwmSetWindowAttribute(hwnd, 35, ref black, sizeof(uint)); // caption colour, Windows 11
+            var dark = ThemeManager.IsDark ? 1 : 0;
+            WmNative.DwmSetWindowAttribute(hwnd, 20, ref dark, sizeof(int)); // title bar follows the theme
+            var bg = ThemeManager.Current.Background;
+            uint caption = (uint)(bg.R | bg.G << 8 | bg.B << 16); // COLORREF: the title bar matches the window
+            WmNative.DwmSetWindowAttribute(hwnd, 35, ref caption, sizeof(uint)); // caption colour, Windows 11
         };
 
         var accent = TryFindResource("AccentColor") is Color c ? c : Color.FromRgb(0x60, 0xCD, 0xFF);
@@ -64,16 +67,7 @@ public partial class TaskManagerWindow : Window
         }
 
         Processes.ItemsSource = _rows;
-        _meters = new()
-        {
-            new Meter("CPU", "#4CC2FF", 100),
-            new Meter("Memory", "#C084FC", 100),
-            new Meter("Disk", "#6CCB5F", 100),
-            new Meter("Network", "#F7A325", 0),
-            new Meter("GPU", "#FF7A9A", 100)
-        };
-        Meters.ItemsSource = _meters;
-        Meters.SelectedIndex = 0;
+        PerformanceHost.Content = _performance;
         UpdateHeaders();
 
         _timer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => _ = TickAsync(), Dispatcher);
@@ -88,6 +82,7 @@ public partial class TaskManagerWindow : Window
             _timer.Stop();
             _armTimer?.Stop();
             _sampler.Dispose();
+            _performance.Clear();
             ThemeManager.Release(Resources);
         };
     }
@@ -106,7 +101,7 @@ public partial class TaskManagerWindow : Window
             var info = await Task.Run(() => Describe(sample.List));
             if (_closed) return;
             _last = sample;
-            UpdateMeters(sample);
+            _performance.Update(sample); // even while hidden, so its history is unbroken
             if (ProcessesPage.Visibility == Visibility.Visible) UpdateProcesses(sample, windows, info);
             UpdateStatus();
         }
@@ -198,6 +193,25 @@ public partial class TaskManagerWindow : Window
         var seenProcesses = new HashSet<(int, long)>();
         var members = new Dictionary<string, List<TaskRow>>();
 
+        // Processes an app starts (a terminal's shell, a launcher's helpers) fold under that app, like
+        // Windows' Task Manager: walk up the parents to the nearest process that has a window.
+        string OwnKey(ProcessSample p) => (p.Path ?? p.Name).ToLowerInvariant();
+        var byPid = new Dictionary<int, ProcessSample>();
+        foreach (var p in sample.List) byPid[p.Pid] = p;
+        var appKeys = sample.List.Where(p => windows.ContainsKey(p.Pid)).Select(OwnKey).ToHashSet();
+        string KeyFor(ProcessSample p)
+        {
+            var own = OwnKey(p);
+            if (appKeys.Contains(own) || p.Path == null || p.Path.StartsWith(windowsFolder, StringComparison.OrdinalIgnoreCase)) return own;
+            var child = p;
+            for (var hop = 0; hop < 8 && byPid.TryGetValue(child.ParentPid, out var parent) && parent.Started <= child.Started && parent.Pid != child.Pid; hop++)
+            {
+                if (appKeys.Contains(OwnKey(parent))) return OwnKey(parent);
+                child = parent;
+            }
+            return own;
+        }
+
         foreach (var p in sample.List)
         {
             var key = (p.Pid, p.Started);
@@ -210,16 +224,25 @@ public partial class TaskManagerWindow : Window
             row.Icon = file?.Icon;
             row.Window = windows.TryGetValue(p.Pid, out var hwnd) ? hwnd : IntPtr.Zero;
             row.IsWindows = p.Path == null || p.Path.StartsWith(windowsFolder, StringComparison.OrdinalIgnoreCase);
+            row.ParentPid = p.ParentPid;
             SetValues(row, p.Cpu, p.Memory, p.Io, p.Gpu);
 
-            var groupKey = (p.Path ?? p.Name).ToLowerInvariant();
+            var groupKey = KeyFor(p);
             if (!members.TryGetValue(groupKey, out var list)) members[groupKey] = list = new();
             list.Add(row);
 
             if (!_groups.TryGetValue(groupKey, out var group))
                 _groups[groupKey] = group = new TaskRow(TaskRowKind.Group, groupKey) { Path = p.Path };
-            group.Name = file?.Description ?? Path.GetFileNameWithoutExtension(p.Name);
-            group.Icon = file?.Icon;
+            // The group is named after its own program, not a helper that joined it.
+            if (groupKey == OwnKey(p))
+            {
+                group.Name = file?.Description ?? Path.GetFileNameWithoutExtension(p.Name);
+                group.Icon = file?.Icon;
+                group.Path = p.Path;
+            }
+            else if (string.IsNullOrEmpty(group.Name)) group.Name = Path.GetFileNameWithoutExtension(groupKey);
+            // Helpers show what they are, since they're a different program from the app they're under.
+            if (groupKey != OwnKey(p)) row.Detail = $"{file?.Description ?? p.Name} · {p.Pid}";
         }
         foreach (var gone in _processes.Keys.Where(k => !seenProcesses.Contains(k)).ToList()) _processes.Remove(gone);
         foreach (var gone in _groups.Keys.Where(k => !members.ContainsKey(k)).ToList()) _groups.Remove(gone);
@@ -257,10 +280,34 @@ public partial class TaskManagerWindow : Window
                 desired.Add(group);
                 if (!group.Expanded) continue;
                 var nameMatches = search.Length == 0 || group.Name.Contains(search, StringComparison.CurrentCultureIgnoreCase);
-                desired.AddRange(Sorted(group.Children.Where(c => nameMatches || Matches(c, search))));
+                desired.AddRange(AsTree(group.Children.Where(c => nameMatches || Matches(c, search)).ToList()));
             }
         }
         Sync(desired);
+    }
+
+    /// <summary>A group's processes as a tree: each under the process that started it, indented a step further.</summary>
+    List<TaskRow> AsTree(List<TaskRow> rows)
+    {
+        var pids = rows.Select(r => r.Pid).ToHashSet();
+        var byParent = rows.GroupBy(r => pids.Contains(r.ParentPid) && r.ParentPid != r.Pid ? r.ParentPid : -1).ToDictionary(g => g.Key, g => g.ToList());
+        var result = new List<TaskRow>();
+        var placed = new HashSet<int>();
+        void Add(int parent, int depth)
+        {
+            if (!byParent.TryGetValue(parent, out var children)) return;
+            foreach (var child in Sorted(children))
+            {
+                if (!placed.Add(child.Pid)) continue; // a loop from a reused process id
+                child.Depth = depth;
+                result.Add(child);
+                Add(child.Pid, depth + 1);
+            }
+        }
+        Add(-1, 0);
+        // Anything left over (a parent loop): flat at the end
+        foreach (var r in Sorted(rows.Where(r => !placed.Contains(r.Pid)))) { r.Depth = 0; result.Add(r); }
+        return result;
     }
 
     static bool Matches(TaskRow row, string search)
@@ -343,7 +390,7 @@ public partial class TaskManagerWindow : Window
     {
         if (_last == null) return;
         UpdateHeaders();
-        if (StartupTab.IsChecked == true) return; // shows its own
+        if (StartupTab.IsChecked == true || ServicesTab.IsChecked == true) return; // they show their own
         Status.Text = $"{_last.Processes} processes  ·  CPU {_last.Cpu:0}%  ·  Memory {100.0 * _last.MemoryUsed / _last.MemoryTotal:0}% "
                     + $"({FormatBytes(_last.MemoryUsed)} of {FormatBytes(_last.MemoryTotal)})";
     }
@@ -362,127 +409,38 @@ public partial class TaskManagerWindow : Window
         return b >= 1e9 ? $"{b / 1e9:0.0} Gbps" : b >= 1e6 ? $"{b / 1e6:0.0} Mbps" : $"{b / 1e3:0} Kbps";
     }
 
-    // ---------- performance ----------
-
-    void UpdateMeters(MachineSample s)
-    {
-        var uptime = TimeSpan.FromMilliseconds(Environment.TickCount64);
-        _meters[0].Push(s.Cpu, $"{s.Cpu:0}%", new()
-        {
-            ["Utilisation"] = $"{s.Cpu:0}%",
-            ["Processes"] = s.Processes.ToString("N0"),
-            ["Threads"] = s.Threads.ToString("N0"),
-            ["Handles"] = s.Handles.ToString("N0"),
-            ["Up time"] = $"{(int)uptime.TotalDays}:{uptime:hh\\:mm\\:ss}",
-            ["Logical processors"] = Environment.ProcessorCount.ToString()
-        });
-        var memory = 100.0 * s.MemoryUsed / Math.Max(1, s.MemoryTotal);
-        _meters[1].Push(memory, $"{FormatBytes(s.MemoryUsed)} / {FormatBytes(s.MemoryTotal)} ({memory:0}%)", new()
-        {
-            ["In use"] = FormatBytes(s.MemoryUsed),
-            ["Available"] = FormatBytes(s.MemoryTotal - s.MemoryUsed),
-            ["Committed"] = $"{FormatBytes(s.Committed)} / {FormatBytes(s.CommitLimit)}",
-            ["Installed"] = FormatBytes(s.MemoryTotal)
-        });
-        _meters[2].Push(s.DiskActive, $"{s.DiskActive:0}%", new()
-        {
-            ["Active time"] = $"{s.DiskActive:0}%",
-            ["Read"] = FormatRate(s.DiskRead),
-            ["Write"] = FormatRate(s.DiskWrite)
-        });
-        _meters[3].Push(s.NetDown + s.NetUp, $"↓ {FormatRate(s.NetDown, bits: true)}  ↑ {FormatRate(s.NetUp, bits: true)}", new()
-        {
-            ["Receive"] = FormatRate(s.NetDown, bits: true),
-            ["Send"] = FormatRate(s.NetUp, bits: true)
-        });
-        _meters[4].Push(s.Gpu ?? 0, s.Gpu is double g ? $"{g:0}%" : "Not available", new()
-        {
-            ["Utilisation"] = s.Gpu is double u ? $"{u:0}%" : "Not available"
-        });
-        ShowMeter();
-    }
-
-    void ShowMeter()
-    {
-        if (Meters.SelectedItem is not Meter meter) return;
-        MeterTitle.Text = meter.Name;
-        MeterNow.Text = meter.Name switch
-        {
-            "CPU" => CpuName,
-            "Memory" => _last != null ? $"{FormatBytes(_last.MemoryTotal)}" : "",
-            _ => ""
-        };
-        BigGraph.Stroke = meter.Brush;
-        BigGraph.Max = meter.GraphMax;
-        BigGraph.Values = meter.History;
-        BigGraph.Version = meter.Version;
-        GraphTop.Text = meter.GraphMax > 0 ? "100%" : FormatRate(meter.History.DefaultIfEmpty(0).Max(), bits: meter.Name == "Network");
-        MeterFacts.ItemsSource = meter.Facts;
-    }
-
-    static string? _cpuName;
-    static string CpuName => _cpuName ??= ReadCpuName();
-
-    static string ReadCpuName()
-    {
-        try
-        {
-            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
-            return (key?.GetValue("ProcessorNameString") as string)?.Trim() ?? "";
-        }
-        catch
-        {
-            return "";
-        }
-    }
-
-    void Meters_SelectionChanged(object sender, SelectionChangedEventArgs e) => ShowMeter();
-
-    // ---------- startup apps ----------
-
-    async Task LoadStartupAsync()
-    {
-        _startupLoaded = true;
-        var rows = await Task.Run(() => StartupApps.Read().Select(app =>
-        {
-            var file = app.Path != null ? Read(app.Path) : null;
-            var who = file?.Company ?? (app.Path != null ? Path.GetFileName(app.Path) : "");
-            return new StartupRow(app)
-            {
-                Icon = file?.Icon,
-                Detail = string.Join("  ·  ", new[] { who, app.Source }.Where(s => s.Length > 0)),
-                Enabled = app.Enabled
-            };
-        }).ToList());
-        if (_closed) return;
-        Startup.ItemsSource = rows;
-        if (StartupPage.Visibility == Visibility.Visible)
-            Status.Text = $"{rows.Count} startup apps, {rows.Count(r => r.Enabled)} turned on";
-    }
-
-    async void StartupSwitch_Click(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.DataContext is not StartupRow row) return;
-        var want = row.Enabled; // the switch has already flipped it
-        var ok = await StartupApps.SetEnabled(row.App, want);
-        if (!ok) row.Enabled = !want;
-        if (Startup.ItemsSource is List<StartupRow> rows)
-            Status.Text = $"{rows.Count} startup apps, {rows.Count(r => r.Enabled)} turned on";
-    }
-
     // ---------- tabs ----------
 
     void Tab_Checked(object sender, RoutedEventArgs e)
     {
         if (ProcessesPage == null) return; // still loading
         ProcessesPage.Visibility = ProcessesTab.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-        PerformancePage.Visibility = PerformanceTab.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-        StartupPage.Visibility = StartupTab.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        PerformanceHost.Visibility = PerformanceTab.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        StartupHost.Visibility = StartupTab.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        ServicesHost.Visibility = ServicesTab.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         SearchBox.Visibility = EndButton.Visibility = ProcessesTab.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        // The startup and services pages are made the first time they're opened, and fill themselves.
         if (StartupTab.IsChecked == true)
         {
-            if (!_startupLoaded) _ = LoadStartupAsync();
-            else if (Startup.ItemsSource is List<StartupRow> rows) Status.Text = $"{rows.Count} startup apps, {rows.Count(r => r.Enabled)} turned on";
+            if (_startup == null)
+            {
+                _startup = new Tasks.StartupPage();
+                _startup.SummaryChanged += (_, _) => { if (StartupTab.IsChecked == true) Status.Text = _startup.Summary; };
+                StartupHost.Content = _startup;
+            }
+            else _startup.Refresh();
+            Status.Text = _startup.Summary;
+        }
+        else if (ServicesTab.IsChecked == true)
+        {
+            if (_services == null)
+            {
+                _services = new Tasks.ServicesPage();
+                _services.SummaryChanged += (_, _) => { if (ServicesTab.IsChecked == true) Status.Text = _services.Summary; };
+                ServicesHost.Content = _services;
+            }
+            else _services.Refresh();
+            Status.Text = _services.Summary;
         }
         else
         {
@@ -499,6 +457,7 @@ public partial class TaskManagerWindow : Window
     {
         Disarm();
         EndButton.IsEnabled = Selected is { Kind: not TaskRowKind.Section };
+        ShowDetails();
     }
 
     void Header_Click(object sender, RoutedEventArgs e)
@@ -643,6 +602,7 @@ public partial class TaskManagerWindow : Window
             Add("Open file location", () => App.Instance.OpenFolder(Path.GetDirectoryName(path), select: path));
             Add("Properties", () => SHObjectProperties(IntPtr.Zero, 2 /* SHOP_FILEPATH */, path, null));
         }
+        AddProcessActions(menu, row);
     }
 
     // ---------- buttons and keys ----------
@@ -650,7 +610,7 @@ public partial class TaskManagerWindow : Window
     void RunTask_Click(object sender, RoutedEventArgs e) =>
         ToolsMenu.Run(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"), args: "shell:::{2559a1f3-21d7-11d4-bdaf-00c04f60b9f0}");
 
-    void Services_Click(object sender, RoutedEventArgs e) => ToolsMenu.Run(Path.Combine(Environment.SystemDirectory, "services.msc"));
+
 
     void WindowsTaskManager_Click(object sender, RoutedEventArgs e) => App.OpenWindowsTaskManager();
 
@@ -726,7 +686,20 @@ public sealed class TaskRow : INotifyPropertyChanged
 
     public TaskRowKind Kind { get; }
     public string Key { get; }
-    public Thickness Indent { get; }
+    Thickness _indent;
+    public Thickness Indent { get => _indent; private set => Set(ref _indent, value); }
+    int _depth;
+    /// <summary>How deep a process sits in its group's tree (0 = started by something outside the group).</summary>
+    public int Depth
+    {
+        get => _depth;
+        set
+        {
+            _depth = value;
+            if (Kind == TaskRowKind.Process) Indent = new Thickness(58 + 18 * Math.Min(value, 6), 0, 0, 0);
+        }
+    }
+    public int ParentPid { get; set; }
     public int Pid { get; init; }
     public string? Path { get; set; }
     public IntPtr Window { get; set; }
@@ -768,136 +741,5 @@ public sealed class TaskRow : INotifyPropertyChanged
         if (EqualityComparer<T>.Default.Equals(field, value)) return;
         field = value;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
-    }
-}
-
-/// <summary>One of the performance graphs: the last minute of a value.</summary>
-public sealed class Meter : INotifyPropertyChanged
-{
-    public Meter(string name, string colour, double graphMax)
-    {
-        Name = name;
-        GraphMax = graphMax;
-        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(colour));
-        brush.Freeze();
-        Brush = brush;
-    }
-
-    public string Name { get; }
-    /// <summary>The top of the graph; 0 means "the biggest value shown".</summary>
-    public double GraphMax { get; }
-    public Brush Brush { get; }
-    public List<double> History { get; } = new();
-    public Dictionary<string, string> Facts { get; private set; } = new();
-    public string Short { get; private set; } = "";
-    public int Version { get; private set; }
-
-    public void Push(double value, string text, Dictionary<string, string> facts)
-    {
-        History.Add(value);
-        if (History.Count > 60) History.RemoveAt(0);
-        Short = text;
-        Facts = facts;
-        Version++;
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Short)));
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Version)));
-    }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-}
-
-/// <summary>A startup program, with the switch's state.</summary>
-public sealed class StartupRow : INotifyPropertyChanged
-{
-    public StartupRow(StartupApp app) => App = app;
-
-    public StartupApp App { get; }
-    public string Name => App.Name;
-    public string Command => App.Command;
-    public string Detail { get; init; } = "";
-    public ImageSource? Icon { get; init; }
-
-    bool _enabled;
-    public bool Enabled
-    {
-        get => _enabled;
-        set
-        {
-            if (_enabled == value) return;
-            _enabled = value;
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Enabled)));
-        }
-    }
-
-    public event PropertyChangedEventHandler? PropertyChanged;
-}
-
-/// <summary>A filled line graph of up to 60 values, newest on the right.</summary>
-public sealed class Sparkline : FrameworkElement
-{
-    public static readonly DependencyProperty ValuesProperty = DependencyProperty.Register(nameof(Values), typeof(IReadOnlyList<double>), typeof(Sparkline),
-        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
-    public static readonly DependencyProperty MaxProperty = DependencyProperty.Register(nameof(Max), typeof(double), typeof(Sparkline),
-        new FrameworkPropertyMetadata(100.0, FrameworkPropertyMetadataOptions.AffectsRender));
-    public static readonly DependencyProperty StrokeProperty = DependencyProperty.Register(nameof(Stroke), typeof(Brush), typeof(Sparkline),
-        new FrameworkPropertyMetadata(Brushes.White, FrameworkPropertyMetadataOptions.AffectsRender));
-    public static readonly DependencyProperty VersionProperty = DependencyProperty.Register(nameof(Version), typeof(int), typeof(Sparkline),
-        new FrameworkPropertyMetadata(0, FrameworkPropertyMetadataOptions.AffectsRender));
-    public static readonly DependencyProperty GridProperty = DependencyProperty.Register(nameof(Grid), typeof(bool), typeof(Sparkline),
-        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
-
-    public IReadOnlyList<double>? Values { get => (IReadOnlyList<double>?)GetValue(ValuesProperty); set => SetValue(ValuesProperty, value); }
-    public double Max { get => (double)GetValue(MaxProperty); set => SetValue(MaxProperty, value); }
-    public Brush Stroke { get => (Brush)GetValue(StrokeProperty); set => SetValue(StrokeProperty, value); }
-    public int Version { get => (int)GetValue(VersionProperty); set => SetValue(VersionProperty, value); }
-    public bool Grid { get => (bool)GetValue(GridProperty); set => SetValue(GridProperty, value); }
-
-    static readonly Pen GridPen = Frozen(new Pen(new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF)), 1));
-
-    protected override void OnRender(DrawingContext dc)
-    {
-        var w = ActualWidth;
-        var h = ActualHeight;
-        dc.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, w, h));
-        if (Grid)
-        {
-            for (var i = 1; i < 4; i++) dc.DrawLine(GridPen, new Point(0, h * i / 4), new Point(w, h * i / 4));
-            for (var i = 1; i < 6; i++) dc.DrawLine(GridPen, new Point(w * i / 6, 0), new Point(w * i / 6, h));
-        }
-        var values = Values;
-        if (values == null || values.Count < 2 || w <= 0 || h <= 0) return;
-
-        var max = Max > 0 ? Max : Math.Max(1, values.Max() * 1.15);
-        var step = w / 59;
-        var x0 = w - step * (values.Count - 1);
-        var line = new StreamGeometry();
-        var area = new StreamGeometry();
-        using (var l = line.Open())
-        using (var a = area.Open())
-        {
-            Point P(int i) => new(x0 + step * i, h - Math.Clamp(values[i] / max, 0, 1) * (h - 2) - 1);
-            l.BeginFigure(P(0), false, false);
-            a.BeginFigure(new Point(x0, h), true, true);
-            a.LineTo(P(0), false, false);
-            for (var i = 1; i < values.Count; i++)
-            {
-                l.LineTo(P(i), true, true);
-                a.LineTo(P(i), false, false);
-            }
-            a.LineTo(new Point(w, h), false, false);
-        }
-        line.Freeze();
-        area.Freeze();
-        var fill = Stroke.Clone();
-        fill.Opacity = 0.18;
-        fill.Freeze();
-        dc.DrawGeometry(fill, null, area);
-        dc.DrawGeometry(null, new Pen(Stroke, 1.5) { LineJoin = PenLineJoin.Round }, line);
-    }
-
-    static Pen Frozen(Pen pen)
-    {
-        pen.Freeze();
-        return pen;
     }
 }

@@ -209,6 +209,7 @@ static class UI
         row.Children.Add(Label(text, 12.5));
         var bg = new Border { CornerRadius = new CornerRadius(14), Background = Raised, Padding = new Thickness(13, 6, 13, 6), Child = row };
         var button = new Button { Content = bg, Cursor = System.Windows.Input.Cursors.Hand, Template = Bare(), Focusable = false, Margin = new Thickness(0, 0, 8, 0) };
+        System.Windows.Automation.AutomationProperties.SetName(button, text);
         button.MouseEnter += (_, _) => bg.Background = RaisedHover;
         button.MouseLeave += (_, _) => bg.Background = Raised;
         button.Click += (_, _) => click();

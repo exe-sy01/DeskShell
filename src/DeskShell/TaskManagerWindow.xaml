@@ -4,7 +4,7 @@
         xmlns:local="clr-namespace:DeskShell"
         Title="Task Manager" Width="1000" Height="700" MinWidth="680" MinHeight="420"
         WindowStartupLocation="CenterScreen"
-        Background="{DynamicResource IslandBrush}" Foreground="{DynamicResource TextBrush}" FontFamily="{StaticResource UiFont}" FontSize="13"
+        Background="{DynamicResource BgBrush}" Foreground="{DynamicResource TextBrush}" FontFamily="{StaticResource UiFont}" FontSize="13"
         UseLayoutRounding="True" PreviewKeyDown="Window_PreviewKeyDown">
     <Window.Resources>
         <Style x:Key="Tab" TargetType="RadioButton" BasedOn="{StaticResource ChipButton}">
@@ -21,12 +21,12 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bg" Background="Transparent" CornerRadius="4" Padding="8,4">
+                        <Border x:Name="Bg" Background="Transparent" CornerRadius="10" Padding="8,4">
                             <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" TextElement.FontSize="12" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileBrush}" />
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource RaisedBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -42,7 +42,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
                         <Grid>
-                            <Border x:Name="Bg" Background="Transparent" CornerRadius="6">
+                            <Border x:Name="Bg" Background="Transparent" CornerRadius="10">
                                 <ContentPresenter />
                             </Border>
                             <Border x:Name="Pill" Width="3" Height="16" CornerRadius="1.5" HorizontalAlignment="Left"
@@ -50,10 +50,10 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileBrush}" />
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource RaisedBrush}" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource TileHoverBrush}" />
+                                <Setter TargetName="Bg" Property="Background"><Setter.Value><SolidColorBrush Color="{DynamicResource AccentColor}" Opacity="0.2" /></Setter.Value></Setter>
                                 <Setter TargetName="Pill" Property="Visibility" Value="Visible" />
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -64,8 +64,8 @@
 
         <Style x:Key="Cell" TargetType="Border">
             <Setter Property="Padding" Value="8,0" />
-            <Setter Property="Margin" Value="1,1" />
-            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Margin" Value="1,2" />
+            <Setter Property="CornerRadius" Value="8" />
         </Style>
         <Style x:Key="CellText" TargetType="TextBlock">
             <Setter Property="HorizontalAlignment" Value="Right" />
@@ -110,22 +110,6 @@
             </Grid>
         </DataTemplate>
 
-        <!-- One graph in the performance sidebar -->
-        <DataTemplate x:Key="MeterButton" DataType="{x:Type local:Meter}">
-            <Grid Height="64">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="84" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Border Background="{DynamicResource TileBrush}" CornerRadius="4" Margin="0,8,12,8" ClipToBounds="True">
-                    <local:Sparkline Values="{Binding History}" Max="{Binding GraphMax}" Stroke="{Binding Brush}" Version="{Binding Version}" />
-                </Border>
-                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding Short}" Foreground="{DynamicResource TextDimBrush}" FontSize="12" TextTrimming="CharacterEllipsis" />
-                </StackPanel>
-            </Grid>
-        </DataTemplate>
     </Window.Resources>
 
     <DockPanel>
@@ -135,6 +119,7 @@
                 <RadioButton x:Name="ProcessesTab" Style="{StaticResource Tab}" Content="Processes" IsChecked="True" Checked="Tab_Checked" />
                 <RadioButton x:Name="PerformanceTab" Style="{StaticResource Tab}" Content="Performance" Checked="Tab_Checked" />
                 <RadioButton x:Name="StartupTab" Style="{StaticResource Tab}" Content="Startup apps" Checked="Tab_Checked" />
+                <RadioButton x:Name="ServicesTab" Style="{StaticResource Tab}" Content="Services" Checked="Tab_Checked" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <TextBox x:Name="SearchBox" Style="{StaticResource SearchBox}" Tag="Search name or PID" Width="230" Height="32" FontSize="13"
@@ -150,9 +135,6 @@
         <Grid DockPanel.Dock="Bottom" Margin="20,6,16,10">
             <TextBlock x:Name="Status" Foreground="{DynamicResource TextDimBrush}" FontSize="12" VerticalAlignment="Center" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Style="{StaticResource GhostButton}" Width="NaN" Height="28" Click="Services_Click" Margin="0,0,4,0">
-                    <TextBlock Text="Services" FontSize="12" Margin="10,0" Foreground="{DynamicResource TextDimBrush}" />
-                </Button>
                 <Button Style="{StaticResource GhostButton}" Width="NaN" Height="28" Click="WindowsTaskManager_Click">
                     <TextBlock Text="Open Windows Task Manager" FontSize="12" Margin="10,0" Foreground="{DynamicResource TextDimBrush}" />
                 </Button>
@@ -161,7 +143,20 @@
 
         <Grid Margin="12,0,12,0">
             <!-- Processes -->
-            <Grid x:Name="ProcessesPage">
+            <Grid x:Name="ProcessesPage" Margin="4,0,4,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition x:Name="DetailsColumn" Width="0" />
+                </Grid.ColumnDefinitions>
+                <!-- The selected process's details, beside the list -->
+                <Border x:Name="DetailsCard" Grid.Column="1" Margin="10,0,0,0" CornerRadius="18" BorderThickness="1" Padding="18,16"
+                        Background="{DynamicResource CardBrush}" BorderBrush="{DynamicResource EdgeBrush}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="DetailsPanel" />
+                    </ScrollViewer>
+                </Border>
+                <Border Background="{DynamicResource CardBrush}" CornerRadius="18" BorderThickness="1" BorderBrush="{DynamicResource EdgeBrush}" />
+            <Grid Margin="6,8,6,6">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
@@ -192,88 +187,12 @@
                     </ListBox.ContextMenu>
                 </ListBox>
             </Grid>
-
-            <!-- Performance -->
-            <Grid x:Name="PerformancePage" Visibility="Collapsed" Margin="4,4,4,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="260" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <ListBox x:Name="Meters" Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource Row}"
-                         ItemTemplate="{StaticResource MeterButton}" SelectionChanged="Meters_SelectionChanged"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" Margin="0,0,16,0" />
-                <Border Grid.Column="1" Background="{DynamicResource TileBrush}" CornerRadius="12" Padding="24,20" Margin="0,0,0,8">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <Grid>
-                            <TextBlock x:Name="MeterTitle" FontFamily="{StaticResource DisplayFont}" FontSize="26" FontWeight="SemiBold" />
-                            <TextBlock x:Name="MeterNow" HorizontalAlignment="Right" VerticalAlignment="Bottom" FontSize="15" Foreground="{DynamicResource TextDimBrush}" />
-                        </Grid>
-                        <Grid Grid.Row="1" Margin="0,16,0,16">
-                            <Border BorderBrush="{DynamicResource EdgeBrush}" BorderThickness="1" CornerRadius="6" ClipToBounds="True">
-                                <local:Sparkline x:Name="BigGraph" Grid="True" />
-                            </Border>
-                            <TextBlock x:Name="GraphTop" Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="8,6" />
-                            <TextBlock Text="60 seconds" Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="8,6"
-                                       VerticalAlignment="Bottom" />
-                        </Grid>
-                        <ItemsControl x:Name="MeterFacts" Grid.Row="2">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Width="170" Margin="0,0,12,12">
-                                        <TextBlock Text="{Binding Key}" Foreground="{DynamicResource TextDimBrush}" FontSize="12" />
-                                        <TextBlock Text="{Binding Value}" FontSize="17" FontWeight="SemiBold" />
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </Grid>
-                </Border>
             </Grid>
 
-            <!-- Startup apps -->
-            <Grid x:Name="StartupPage" Visibility="Collapsed">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <TextBlock Foreground="{DynamicResource TextDimBrush}" FontSize="12" Margin="8,0,8,8" TextWrapping="Wrap"
-                           Text="Programs that start when you sign in. Turning one off keeps it installed; it just won't start by itself. Ones for all users ask for administrator permission." />
-                <ListBox x:Name="Startup" Grid.Row="1" Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource Row}"
-                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate DataType="{x:Type local:StartupRow}">
-                            <Grid Height="44" Margin="8,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Grid Width="24" Height="24" Margin="0,0,12,0">
-                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE7C4;" FontSize="16" Foreground="{DynamicResource TextDimBrush}" />
-                                    <Image Source="{Binding Icon}" RenderOptions.BitmapScalingMode="HighQuality" />
-                                </Grid>
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding Detail}" Foreground="{DynamicResource TextDimBrush}" FontSize="11.5" TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding Command}" />
-                                </StackPanel>
-                                <CheckBox Grid.Column="2" Style="{StaticResource Switch}" IsChecked="{Binding Enabled, Mode=OneWay}"
-                                          Click="StartupSwitch_Click" VerticalAlignment="Center" Margin="12,0,0,0" />
-                            </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-            </Grid>
+            <!-- Performance, startup apps and services: pages of their own (DeskShell.Tasks) -->
+            <ContentControl x:Name="PerformanceHost" Visibility="Collapsed" Focusable="False" />
+            <ContentControl x:Name="StartupHost" Visibility="Collapsed" Focusable="False" Margin="4,0,4,8" />
+            <ContentControl x:Name="ServicesHost" Visibility="Collapsed" Focusable="False" Margin="4,0,4,8" />
         </Grid>
     </DockPanel>
 </Window>
