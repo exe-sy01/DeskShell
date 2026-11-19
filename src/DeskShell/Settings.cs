@@ -178,6 +178,8 @@ public sealed class Settings
     public bool UseDeskShellFiles { get; set; } = true;
     /// <summary>Windows opens every folder (from the desktop, other apps…) in DeskShell's file explorer.</summary>
     public bool OpenAllFoldersInDeskShell { get; set; }
+    /// <summary>Connect to Sage (PCAssistant) when it's installed: its notch tab, voice pop-ups and approvals. Off: DeskShell ignores it.</summary>
+    public bool Sage { get; set; } = true;
     /// <summary>Search files: an index of every file and folder name on the NTFS drives, kept current (off deletes it).</summary>
     public bool FileSearch { get; set; } = true;
     public string SearchHotkey { get; set; } = "Alt+F";

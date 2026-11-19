@@ -145,7 +145,7 @@ public partial class App : Application
         _clipboard = new ClipboardHistory();
         ScreenTime.Start();
         Claude.ClaudeHub.Start(Dispatcher); // Claude Code sessions report here through their hooks
-        Sage.SageLink.Start(Dispatcher); // Sage (PCAssistant), if it's running
+        if (Settings.Sage && Sage.SageLink.Installed) Sage.SageLink.Start(Dispatcher); // Sage (PCAssistant): optional, only if installed
         CreateBars();
         StartWatchingSystem();
 
@@ -266,6 +266,17 @@ public partial class App : Application
     /// <summary>Called by the settings window after saving.</summary>
     public void ApplySettings(Settings updated)
     {
+        // Sage switched off or on: its notch tab goes or comes back with it.
+        if (updated.Sage != Settings.Sage)
+        {
+            if (!updated.Sage) updated.Notch.Tabs.Remove("sage");
+            else if (Sage.SageLink.Installed && !updated.Notch.Tabs.Contains("sage"))
+            {
+                var claude = updated.Notch.Tabs.IndexOf("claude");
+                updated.Notch.Tabs.Insert(claude >= 0 ? claude + 1 : Math.Min(1, updated.Notch.Tabs.Count), "sage");
+            }
+        }
+        var sageChanged = updated.Sage != Settings.Sage;
         var taskbarChanged = updated.ShowWindowsTaskbar != Settings.ShowWindowsTaskbar;
         var dockChanged = updated.ShowIsland != Settings.ShowIsland || updated.IslandOnAllMonitors != Settings.IslandOnAllMonitors ||
                           updated.IslandReserveSpace != Settings.IslandReserveSpace || updated.IslandLook != Settings.IslandLook ||
@@ -276,6 +287,11 @@ public partial class App : Application
         Settings = updated;
         Settings.Save();
         ThemeManager.Refresh();
+        if (sageChanged)
+        {
+            if (Settings.Sage && Sage.SageLink.Installed) Sage.SageLink.Start(Dispatcher);
+            else Sage.SageLink.Stop();
+        }
 
         RegisterHotkeys();
         if (_altTab != null)

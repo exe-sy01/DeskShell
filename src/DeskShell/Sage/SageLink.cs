@@ -88,6 +88,7 @@ public static class SageLink
     public static void Stop()
     {
         _stop?.Cancel();
+        _stop = null; // so Start can connect again (the setting switched back on)
         try { _pipe?.Dispose(); } catch { }
     }
 

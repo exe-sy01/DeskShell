@@ -61,6 +61,8 @@
                 <CheckBox x:Name="OpenAllFoldersInDeskShell" Style="{StaticResource Switch}" Margin="0,0,0,10"
                           IsEnabled="{Binding IsChecked, ElementName=UseDeskShellFiles}"
                           Content="Open every folder in DeskShell's file explorer, from the desktop and other apps too" />
+                <CheckBox x:Name="SageOn" Style="{StaticResource Switch}" Margin="0,0,0,10"
+                          Content="Sage (PCAssistant): a notch tab, voice pop-ups and approvals when it's installed (off: DeskShell leaves it alone)" />
                 <CheckBox x:Name="FileSearch" Style="{StaticResource Switch}" Margin="0,0,0,4"
                           Content="Search files: index every file and folder name on the NTFS drives, found as you type" />
                 <TextBlock Style="{StaticResource Note}" Margin="52,0,0,10"
