@@ -71,7 +71,11 @@ internal static class Native
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr SendMessageTimeout(IntPtr hWnd, int msg, IntPtr wParam, string lParam, uint flags, uint timeout, out IntPtr result);
 
-    /// <summary>Tells running apps the light/dark theme changed so they repaint.</summary>
+    /// <summary>
+    /// Tells running apps the light/dark theme changed so they repaint. From a background thread: the
+    /// broadcast waits on every window in turn, our own SystemEvents window included, which waits for
+    /// the UI thread, so sending it from the UI thread stalls it (see WorkAreaReserver.Release).
+    /// </summary>
     public static void BroadcastThemeChange() =>
-        SendMessageTimeout(HWND_BROADCAST, WM_SETTINGCHANGE, IntPtr.Zero, "ImmersiveColorSet", SMTO_ABORTIFHUNG, 200, out _);
+        Task.Run(() => SendMessageTimeout(HWND_BROADCAST, WM_SETTINGCHANGE, IntPtr.Zero, "ImmersiveColorSet", SMTO_ABORTIFHUNG, 200, out _));
 }

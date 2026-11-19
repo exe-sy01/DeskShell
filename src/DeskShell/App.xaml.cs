@@ -633,59 +633,93 @@ public partial class App : Application
         if (_quitting) return;
         _quitting = true;
         Log.Info("Quitting DeskShell");
-        // If something hangs while shutting down, leave anyway (with the taskbar back) rather than linger half-closed.
+        // If something hangs while shutting down, leave anyway (with the taskbar back) rather than linger
+        // half-closed, and say which step it was stuck in.
         new Thread(() =>
         {
             Thread.Sleep(8000);
-            Log.Error("Quitting took too long; exiting");
+            Log.Error($"Quitting took too long (stuck in \"{_quitStep}\" for {Environment.TickCount64 - Interlocked.Read(ref _quitStepAt)} ms); exiting");
             TaskbarGuard.Restore();
             Environment.Exit(0);
         }) { IsBackground = true, Name = "DeskShell quit timeout" }.Start();
-        _taskManager?.Close();
 
-        try
+        // Each step on its own: one that fails doesn't skip the rest.
+        var failed = false;
+        void Step(string name, Action action)
         {
-            ScreenTime.Save();
-            Claude.ClaudeHub.Stop(); // any waiting requests go back to Claude's own prompt
-            Sage.SageLink.Stop();
-            WindowsBanners.Restore(); // Windows shows its banners again while DeskShell isn't running
-            _watcher?.Dispose();
-            NotificationWatcher.Stop();
-            DiscordLink.Stop();
-            Fullscreen?.Dispose();
-            UpdateService.Stop();
-            _hotkeys?.Dispose();
-            GameMode.Stop();
-            VoicemeeterService.Disconnect();
-            BadgeService.Instance.Stop();
-            DockPins.Stop();
-            _altTab?.Dispose();
-            _events?.Dispose();
-            _border?.Reset();
+            _quitStep = name;
+            var started = Environment.TickCount64;
+            Interlocked.Exchange(ref _quitStepAt, started);
+            try { action(); }
+            catch (Exception ex)
+            {
+                failed = true;
+                Log.Error($"Quitting: {name} failed", ex);
+            }
+            var took = Environment.TickCount64 - started;
+            if (took > 300) Log.Info($"Quitting: {name} took {took} ms");
+        }
+
+        Step("Task Manager", () => _taskManager?.Close());
+        Step("screen time", ScreenTime.Save);
+        Step("Claude", Claude.ClaudeHub.Stop); // any waiting requests go back to Claude's own prompt
+        Step("Sage", Sage.SageLink.Stop);
+        Step("notification banners", WindowsBanners.Restore); // Windows shows its banners again while DeskShell isn't running
+        Step("system watcher", () => _watcher?.Dispose());
+        Step("notification watcher", NotificationWatcher.Stop);
+        Step("Discord link", DiscordLink.Stop);
+        Step("fullscreen watcher", () => Fullscreen?.Dispose());
+        Step("updates", UpdateService.Stop);
+        Step("hotkeys", () => _hotkeys?.Dispose());
+        Step("game mode", GameMode.Stop);
+        Step("Voicemeeter", VoicemeeterService.Disconnect);
+        Step("badges", BadgeService.Instance.Stop);
+        Step("dock pins", DockPins.Stop);
+        Step("Alt+Tab", () => _altTab?.Dispose());
+        Step("window events", () => _events?.Dispose());
+        Step("active border", () => _border?.Reset());
+        Step("window positions", () =>
+        {
             _placer?.SaveAll();
             _placer?.Dispose();
-            Zones?.Dispose();
-            _clipboard?.Dispose();
-            Overview?.Close();
-            _settingsWindow?.Close();
-            _drawer?.ForceClose();
-            _shellWindow?.ForceClose();
-            CloseBars();
-            Shell.AppBarManager.SignalGracefulShutdown();
-            _hider?.Stop();
-            // After Explorer's taskbar is back, so Explorer reclaims its space when it recalculates.
+        });
+        Step("zones", () => Zones?.Dispose());
+        Step("clipboard", () => _clipboard?.Dispose());
+        Step("overview", () => Overview?.Close());
+        Step("settings window", () => _settingsWindow?.Close());
+        Step("app drawer", () => _drawer?.ForceClose());
+        Step("shell", () => _shellWindow?.ForceClose());
+        Step("island and notch", CloseBars);
+        Step("app bars", () => Shell.AppBarManager.SignalGracefulShutdown());
+        Step("Windows taskbar back", () => _hider?.Stop());
+        // After Explorer's taskbar is back, so Explorer reclaims its space when it recalculates.
+        Step("screen space", () =>
+        {
             _workArea?.Release();
             _workArea?.Dispose();
-            Shell.Dispose();
-            TaskbarGuard.Disarm();
-        }
-        catch (Exception ex)
+        });
+        Step("ManagedShell", () => Shell.Dispose());
+        if (failed)
         {
-            Log.Error("Error while quitting; restoring taskbar directly", ex);
+            Log.Error("Something failed while quitting; restoring the taskbar directly");
             TaskbarGuard.Restore();
         }
+        Step("watchdog", TaskbarGuard.Disarm);
 
-        Shutdown();
+        Step("shutting down WPF", Shutdown);
+        // Past here the process should simply end; if the timeout still fires, something keeps it alive.
+        _quitStep = "exiting after shutdown";
+        Interlocked.Exchange(ref _quitStepAt, Environment.TickCount64);
+    }
+
+    static volatile string _quitStep = "starting";
+    static long _quitStepAt = Environment.TickCount64;
+
+    /// <summary>Called once WPF has stopped: what's left is the process ending (a thread that won't stop would show here).</summary>
+    public static void MarkUiClosed()
+    {
+        _quitStep = "process exit, after the UI closed";
+        Interlocked.Exchange(ref _quitStepAt, Environment.TickCount64);
     }
 
     protected override void OnSessionEnding(SessionEndingCancelEventArgs e)

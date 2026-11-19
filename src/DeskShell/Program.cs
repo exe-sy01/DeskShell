@@ -32,5 +32,6 @@ public static class Program
         var app = new App();
         app.InitializeComponent();
         app.Run();
+        App.MarkUiClosed();
     }
 }

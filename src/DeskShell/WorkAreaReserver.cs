@@ -58,9 +58,11 @@ internal sealed class WorkAreaReserver : IDisposable
         }
         _targets.Clear();
 
-        // Announce it so Explorer recalculates and claims its taskbar space. Sent with a timeout
-        // (unlike SPIF_SENDCHANGE) so a hung window can never stall quitting.
-        SendMessageTimeout(new IntPtr(0xffff), WM_SETTINGCHANGE, new IntPtr(SPI_SETWORKAREA), IntPtr.Zero, 0x0002 /* SMTO_ABORTIFHUNG */, 1000, out _);
+        // Announce it so Explorer recalculates and claims its taskbar space. Without waiting for
+        // anyone: a waiting broadcast (SPIF_SENDCHANGE, or SendMessageTimeout, whose timeout counts
+        // per window) deadlocked with our own SystemEvents thread, which passes the change on to this
+        // UI thread and waits for it, and stalled quitting for 8 seconds until the quit timeout fired.
+        SendNotifyMessage(new IntPtr(0xffff), WM_SETTINGCHANGE, new IntPtr(SPI_SETWORKAREA), IntPtr.Zero);
     }
 
     void Apply()
@@ -133,5 +135,5 @@ internal sealed class WorkAreaReserver : IDisposable
 
     [DllImport("user32.dll")] static extern bool SystemParametersInfo(int action, int param, ref RECT rect, int winIni);
     [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
-    [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
+    [DllImport("user32.dll")] static extern bool SendNotifyMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam);
 }
