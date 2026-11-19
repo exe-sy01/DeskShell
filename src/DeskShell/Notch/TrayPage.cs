@@ -37,8 +37,28 @@ sealed class TrayPage(NotchContext c) : NotchPage(c)
         return page;
     }
 
-    IEnumerable<NotifyIcon> Icons() =>
-        Context.Shell.NotificationArea.AllIcons?.OfType<NotifyIcon>() ?? Context.Shell.NotificationArea.TrayIcons;
+    /// <summary>
+    /// The icons worth showing. An app that crashed or was ended never takes its icon away, and the taskbar only
+    /// notices when the mouse passes over it; here an icon whose window is gone is dropped at once (for the shell's
+    /// tile too). Hidden icons are left out, and an app that added the same icon twice (e.g. after Explorer
+    /// restarted) shows once.
+    /// </summary>
+    List<NotifyIcon> Icons()
+    {
+        var all = Context.Shell.NotificationArea.TrayIcons;
+        foreach (var dead in all.Where(i => i.HWnd == IntPtr.Zero || !WindowManagement.WmNative.IsWindow(i.HWnd)).ToList())
+        {
+            Log.Info($"Dropping a tray icon whose app has gone: {dead.Title?.Split('\n')[0]} ({dead.Path})");
+            all.Remove(dead);
+        }
+        return all
+            .Where(i => i.Icon != null && !i.IsHidden)
+            .Reverse() // newest first, so a duplicate keeps its latest copy
+            .DistinctBy(i => string.IsNullOrEmpty(i.Path) ? i.HWnd.ToString() : $"{i.Path}\n{i.Title}".ToLowerInvariant())
+            .Reverse()
+            .OrderByDescending(i => i.IsPinned).ThenBy(i => i.PinOrder)
+            .ToList();
+    }
 
     public override void Refresh()
     {
@@ -54,8 +74,8 @@ sealed class TrayPage(NotchContext c) : NotchPage(c)
     /// <summary>Rebuilds only when icons come, go, or change their picture or text.</summary>
     public override void Tick()
     {
-        var icons = Icons().Where(i => i.Icon != null).ToList();
-        var signature = string.Join("|", icons.Select(i => $"{i.Identifier}:{i.Title}:{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(i.Icon)}"));
+        var icons = Icons();
+        var signature = string.Join("|", icons.Select(i => $"{i.Identifier}:{i.HWnd}:{i.Title}:{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(i.Icon)}"));
         if (signature == _shown) return;
         _shown = signature;
         _count.Text = icons.Count switch
