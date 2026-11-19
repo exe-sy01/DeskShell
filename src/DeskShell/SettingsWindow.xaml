@@ -61,6 +61,15 @@
                 <CheckBox x:Name="OpenAllFoldersInDeskShell" Style="{StaticResource Switch}" Margin="0,0,0,10"
                           IsEnabled="{Binding IsChecked, ElementName=UseDeskShellFiles}"
                           Content="Open every folder in DeskShell's file explorer, from the desktop and other apps too" />
+                <CheckBox x:Name="FileSearch" Style="{StaticResource Switch}" Margin="0,0,0,4"
+                          Content="Search files: index every file and folder name on the NTFS drives, found as you type" />
+                <TextBlock Style="{StaticResource Note}" Margin="52,0,0,10"
+                           Text="Needs no admin rights. Kept up to date from each drive's change journal, paused in games. Off deletes the index." />
+                <Grid Style="{StaticResource Row}">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="220" /><ColumnDefinition Width="220" /></Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource Label}" Text="Search files" />
+                    <TextBox x:Name="SearchHotkey" Grid.Column="1" Style="{StaticResource Field}" />
+                </Grid>
                 <Grid Style="{StaticResource Row}">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="220" /><ColumnDefinition Width="220" /></Grid.ColumnDefinitions>
                     <TextBlock Style="{StaticResource Label}" Text="Open the shell" />

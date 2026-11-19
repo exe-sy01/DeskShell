@@ -81,6 +81,8 @@
             <Grid DockPanel.Dock="Bottom" Margin="0,10,0,0">
                 <StackPanel x:Name="Links" Orientation="Horizontal">
                     <Button Style="{StaticResource PillButton}" Tag="&#xE8B7;" Content="Files" Margin="0,0,6,0" Click="Files_Click" />
+                    <Button x:Name="SearchFilesButton" Style="{StaticResource PillButton}" Tag="&#xE721;" Content="Search files" Margin="0,0,6,0" Click="SearchFiles_Click"
+                            ToolTip="Every file and folder on your drives, as you type (Alt+Enter searches files for what you typed)" />
                     <Button Style="{StaticResource PillButton}" Tag="&#xE896;" Content="Downloads" Margin="0,0,6,0" Click="Downloads_Click" />
                     <Button Style="{StaticResource PillButton}" Tag="&#xE8A5;" Content="Documents" Margin="0,0,6,0" Click="Documents_Click" />
                     <Button Style="{StaticResource PillButton}" Tag="&#xE713;" Content="Settings" Margin="0,0,6,0" Click="WindowsSettings_Click" />

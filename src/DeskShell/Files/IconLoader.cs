@@ -33,6 +33,14 @@ public static class IconLoader
 
     public static ImageSource? Small(FileItem item, Action<ImageSource> loaded, Action dropped) => Small(item.Path, item.IsFolder, SharedKey(item), loaded, dropped);
 
+    /// <summary>The shared-icon key for a path known only by name and kind (search results); null if it has its own icon.</summary>
+    public static string? KeyFor(string name, bool isFolder, bool system)
+    {
+        if (isFolder) return system ? null : "<folder>";
+        var ext = Path.GetExtension(name);
+        return OwnIcon.Contains(ext) ? null : ext.Length == 0 ? "<file>" : ext;
+    }
+
     /// <summary>A 32px icon for any path (also used by the sidebar).</summary>
     public static ImageSource? Small(string path, bool isFolder, string? key, Action<ImageSource> loaded, Action? dropped = null)
     {

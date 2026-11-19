@@ -18,10 +18,13 @@ namespace DeskShell.Files;
 public static class FilesHost
 {
     public const string QuitEventName = "DeskShell.Files.QuitRequest";
-    static string Suffix => $"{Environment.UserName}.{Process.GetCurrentProcess().SessionId}";
+    // DESKSHELL_FILES_INSTANCE (for development) runs a second explorer process beside the installed one.
+    static string Suffix => $"{Environment.UserName}.{Process.GetCurrentProcess().SessionId}" +
+                            (Environment.GetEnvironmentVariable("DESKSHELL_FILES_INSTANCE") is { Length: > 0 } instance ? "." + instance : "");
     static string PipeName => "DeskShell.Files." + Suffix;
 
-    public sealed record Request(string? Path, string? Select, bool NewWindow, bool Background);
+    /// <summary><paramref name="Search"/>: open Search files instead (with this text; "" keeps the last search).</summary>
+    public sealed record Request(string? Path, string? Select, bool NewWindow, bool Background, string? Search = null);
 
     /// <summary>The running explorer process's app, when this is that process.</summary>
     public static FilesApp? App { get; private set; }
@@ -33,6 +36,15 @@ public static class FilesHost
         Task.Run(() =>
         {
             var request = new Request(path, select, newWindow, false);
+            if (TrySend(request)) return;
+            Start(request);
+        });
+
+    /// <summary>Opens (or closes, if it's in front) Search files, which lives in the explorer's process with the file index.</summary>
+    public static void OpenSearch(string? text = null) =>
+        Task.Run(() =>
+        {
+            var request = new Request(null, null, false, false, text ?? "");
             if (TrySend(request)) return;
             Start(request);
         });
@@ -50,6 +62,7 @@ public static class FilesHost
     {
         var args = new List<string> { "--files" };
         if (request.Background) args.Add("--background");
+        if (request.Search != null) { args.Add("--search"); args.Add(request.Search); }
         if (request.NewWindow) args.Add("--new-window");
         if (request.Select != null) { args.Add("--select"); args.Add(request.Select); }
         if (request.Path != null) args.Add(request.Path);
@@ -123,7 +136,7 @@ public static class FilesHost
     /// </summary>
     public static void Run(string[] args)
     {
-        string? path = null, select = null;
+        string? path = null, select = null, search = null;
         bool newWindow = false, background = false;
         for (var i = 1; i < args.Length; i++)
         {
@@ -132,11 +145,12 @@ public static class FilesHost
                 case "--new-window": newWindow = true; break;
                 case "--background": background = true; break;
                 case "--select" when i + 1 < args.Length: select = args[++i]; break;
+                case "--search": search = i + 1 < args.Length ? args[++i] : ""; break;
                 default: path = args[i]; break;
             }
         }
         if (select != null && path == null) path = Path.GetDirectoryName(select);
-        var request = new Request(path, select, newWindow, background);
+        var request = new Request(path, select, newWindow, background, search);
 
         if (TrySend(request)) return;
         using var mutex = new Mutex(true, "DeskShell.Files." + Suffix, out var first);
@@ -199,6 +213,7 @@ public sealed class FilesApp : Application
             {
                 ((DispatcherTimer)s!).Stop();
                 ThemeManager.Refresh();
+                ApplyIndexSetting();
             }, Dispatcher);
             debounce.Stop();
             watcher.Changed += (_, _) => Dispatcher.BeginInvoke(() => { debounce.Stop(); debounce.Start(); });
@@ -212,6 +227,7 @@ public sealed class FilesApp : Application
         ThemeManager.Use(Resources);
         ShellNative.UseDarkMenus();
         FileView.Load();
+        ApplyIndexSetting();
         Handle(first);
         new Thread(() => Listen(pipeName)) { IsBackground = true, Name = "DeskShell files requests" }.Start();
 
@@ -221,7 +237,7 @@ public sealed class FilesApp : Application
         // In the background with no windows: give memory back, and leave if DeskShell itself has gone.
         _idle = new DispatcherTimer(TimeSpan.FromMinutes(2), DispatcherPriority.Background, (_, _) =>
         {
-            if (_windows.Count > 0) return;
+            if (_windows.Count > 0 || _search is { IsVisible: true }) return;
             if (!Mutex.TryOpenExisting("DeskShell.SingleInstance", out var shell))
             {
                 Quit();
@@ -257,6 +273,11 @@ public sealed class FilesApp : Application
 
     void Handle(FilesHost.Request request)
     {
+        if (request.Search != null)
+        {
+            OpenSearch(request.Search.Length == 0 ? null : request.Search);
+            return;
+        }
         if (request.Background) return;
         // Asked for a specific folder: a new tab in the window you used last. Otherwise a new window.
         var target = request.NewWindow || request.Path == null ? null : _lastActive ?? _windows.LastOrDefault();
@@ -292,18 +313,48 @@ public sealed class FilesApp : Application
         Bring(window);
     }
 
+    // ---------- Search files and its index ----------
+
+    Search.SearchWindow? _search;
+
+    /// <summary>Search files: <paramref name="text"/> typed in, or (null) the last search, or closed if it's already in front.</summary>
+    public void OpenSearch(string? text)
+    {
+        if (!Search.FileIndex.Running && (Settings.ReadOnly()?.FileSearch ?? true)) Search.FileIndex.Start();
+        _search ??= new Search.SearchWindow();
+        if (text == null) _search.Toggle(null);
+        else _search.ShowFor(text);
+    }
+
+    /// <summary>Shows a folder (with <paramref name="select"/> picked in it) in a tab of the window used last, or a new window.</summary>
+    public void ShowFolder(string path, string? select) => Handle(new FilesHost.Request(path, select, false, false));
+
+    /// <summary>The index runs while the setting is on (it's on unless switched off); switching it off deletes it.</summary>
+    void ApplyIndexSetting()
+    {
+        var on = Settings.ReadOnly()?.FileSearch ?? true;
+        if (on && !Search.FileIndex.Running) Search.FileIndex.Start();
+        else if (!on && Search.FileIndex.Running)
+            Task.Run(() =>
+            {
+                Search.FileIndex.Stop(delete: true);
+                Dispatcher.BeginInvoke(TrimSoon);
+            });
+    }
+
     static void Bring(Window window)
     {
         if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
         WindowManagement.WmNative.Activate(new WindowInteropHelper(window).Handle);
     }
 
-    void TrimSoon()
+    /// <summary>A moment after the last window closes: hand unused memory back to Windows.</summary>
+    public void TrimSoon()
     {
         var timer = new DispatcherTimer(TimeSpan.FromSeconds(3), DispatcherPriority.Background, (s, _) =>
         {
             ((DispatcherTimer)s!).Stop();
-            if (_windows.Count > 0) return;
+            if (_windows.Count > 0 || _search is { IsVisible: true }) return;
             System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
             GC.Collect(2, GCCollectionMode.Aggressive, true, true);
             GC.WaitForPendingFinalizers();
@@ -318,6 +369,8 @@ public sealed class FilesApp : Application
     void Quit()
     {
         foreach (var window in _windows.ToList()) window.Close();
+        _search?.Close();
+        Search.FileIndex.Stop(); // saves it, so the next start only reads what changed since
         Shutdown();
     }
 

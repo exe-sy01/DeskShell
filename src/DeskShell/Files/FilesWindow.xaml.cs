@@ -640,7 +640,8 @@ public partial class FilesWindow : Window
         else if (_tab.Shown.Count == 0 && !_tab.Searching)
         {
             EmptyGlyph.Text = _tab.SearchQuery != null || _tab.Filter.Length > 0 ? "" : "";
-            EmptyText.Text = _tab.SearchQuery != null ? "Nothing found." : _tab.Filter.Length > 0 ? "No matches in this folder. Press Enter to search its subfolders too." : "This folder is empty.";
+            EmptyText.Text = _tab.SearchQuery != null ? "Nothing found here. Alt+Enter searches every drive."
+                : _tab.Filter.Length > 0 ? "No matches in this folder. Enter searches its subfolders too, Alt+Enter every drive." : "This folder is empty.";
             EmptyNote.Visibility = Visibility.Visible;
         }
         else EmptyNote.Visibility = Visibility.Collapsed;
@@ -929,9 +930,22 @@ public partial class FilesWindow : Window
         UpdateStatus();
     }
 
+    /// <summary>Search files (every drive, from the index), with what's typed in the search box.</summary>
+    void SearchEverywhere()
+    {
+        var text = SearchBox.Text.Trim();
+        FilesHost.App?.OpenSearch(text.Length > 0 ? text : null);
+    }
+
     void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && SearchBox.Text.Trim().Length > 0 && _tab.Location != Home)
+        // Alt+Enter, or Enter on Home (which has no folder to search): every drive.
+        if ((e.Key == Key.System && e.SystemKey == Key.Enter || e.Key == Key.Enter && _tab.Location == Home) && SearchBox.Text.Trim().Length > 0)
+        {
+            SearchEverywhere();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter && SearchBox.Text.Trim().Length > 0 && _tab.Location != Home)
         {
             StartDeepSearch(SearchBox.Text.Trim());
             e.Handled = true;
@@ -1688,6 +1702,7 @@ public partial class FilesWindow : Window
         if (alt && key == Key.Right || key == Key.BrowserForward) { Handle(GoForward); return; }
         if (alt && key == Key.Up) { Handle(GoUp); return; }
         if (alt && key == Key.D || ctrl && key == Key.L || key == Key.F4 && mods == ModifierKeys.None) { Handle(EditAddress); return; }
+        if (ctrlShift && key == Key.F) { Handle(SearchEverywhere); return; }
         if (ctrl && key == Key.F || key == Key.F3 && mods == ModifierKeys.None || ctrl && key == Key.E) { Handle(() => { SearchBox.Focus(); SearchBox.SelectAll(); }); return; }
         if (ctrl && key == Key.T) { Handle(() => OpenTab(_tab.Location)); return; }
         if (ctrl && key == Key.W) { Handle(() => CloseTab(_tab)); return; }

@@ -427,7 +427,8 @@
                 </Border>
 
                 <TextBox x:Name="SearchBox" Grid.Column="2" Style="{StaticResource SearchBox}" Tag="Search" Width="260" Height="34" FontSize="13"
-                         Margin="8,0,0,0" TextChanged="SearchBox_TextChanged" PreviewKeyDown="SearchBox_PreviewKeyDown" />
+                         Margin="8,0,0,0" TextChanged="SearchBox_TextChanged" PreviewKeyDown="SearchBox_PreviewKeyDown"
+                         ToolTip="Filters this folder. Enter searches its subfolders too; Alt+Enter (or Ctrl+Shift+F) searches every drive." />
             </Grid>
         </Border>
 

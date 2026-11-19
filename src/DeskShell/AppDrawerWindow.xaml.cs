@@ -124,6 +124,7 @@ public partial class AppDrawerWindow : Window
         SetNotchLook(_notch != null);
 
         SearchBox.Text = "";
+        SearchFilesButton.Visibility = App.Settings.FileSearch ? Visibility.Visible : Visibility.Collapsed;
         DisarmPower();
         ShowBrowse();
 
@@ -322,6 +323,7 @@ public partial class AppDrawerWindow : Window
     {
         Rows.ItemsSource = _rows;
         NoResults.Visibility = _cells.Count == 0 && SearchBox.Text.Trim().Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        NoResults.Text = App.Settings.FileSearch ? "No apps match that. Press Enter to search your files for it." : "No apps match that";
         if (_rows.Count > 0) Rows.ScrollIntoView(_rows[0]);
         if (select && _cells.Count > 0) Select(0);
     }
@@ -370,6 +372,10 @@ public partial class AppDrawerWindow : Window
             case Key.Escape:
                 if (SearchBox.Text.Length > 0) SearchBox.Text = "";
                 else CloseDrawer();
+                break;
+            // Alt+Enter, or Enter when no app matches: look for files by that name instead.
+            case Key.Enter or Key.System when (e.Key == Key.Enter && _selected < 0 || e.SystemKey == Key.Enter) && SearchBox.Text.Trim().Length > 0 && App.Settings.FileSearch:
+                SearchFiles(SearchBox.Text.Trim());
                 break;
             case Key.Enter when _selected >= 0:
                 // Ctrl+Shift+Enter runs it as administrator, as in the Start menu
@@ -489,6 +495,19 @@ public partial class AppDrawerWindow : Window
     {
         CloseDrawer();
         App.Instance.OpenFolder(null);
+    }
+
+    /// <summary>Search files, with whatever was typed here.</summary>
+    void SearchFiles_Click(object sender, RoutedEventArgs e)
+    {
+        var text = SearchBox.Text.Trim();
+        SearchFiles(text.Length > 0 ? text : null);
+    }
+
+    void SearchFiles(string? text)
+    {
+        CloseDrawer();
+        App.Instance.OpenFileSearch(text);
     }
     void Documents_Click(object sender, RoutedEventArgs e) => OpenFolder(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
     void WindowsSettings_Click(object sender, RoutedEventArgs e) => OpenThing("ms-settings:");

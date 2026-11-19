@@ -26,6 +26,9 @@ public sealed class FilesPreferences
     /// <summary>Folders that remember the grid view (pictures and so on), by path.</summary>
     public List<string> TileFolders { get; set; } = new();
     public List<string> DetailFolders { get; set; } = new();
+    /// <summary>The Search files window's size (0 = the default).</summary>
+    public double SearchWidth { get; set; }
+    public double SearchHeight { get; set; }
 }
 
 /// <summary>Loads and saves the preferences; hidden-file and extension settings start from Explorer's.</summary>

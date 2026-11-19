@@ -184,6 +184,7 @@ public partial class App : Application
         GameMode.Start(Fullscreen);
         GameMode.Changed += on =>
         {
+            GameModeSignal.Set(on); // DeskShell's other processes (the file index) pause too
             BadgeService.Instance.SetPaused(on);
             NotificationWatcher.Paused = on;
             DockPins.SetPaused(on);
@@ -206,11 +207,13 @@ public partial class App : Application
         };
         UpdateService.Start();
         // The file explorer's process starts a little later, in the background, so its first window opens at once.
-        if (Settings.UseDeskShellFiles)
+        // It also keeps the file index for Search files.
+        if (Settings.UseDeskShellFiles || Settings.FileSearch)
             _ = Dispatcher.InvokeAsync(async () =>
             {
                 await Task.Delay(TimeSpan.FromSeconds(20));
-                if (!_quitting && Settings.UseDeskShellFiles && !GameMode.Active) Files.FilesHost.Preload();
+                while (!_quitting && GameMode.Active) await Task.Delay(TimeSpan.FromSeconds(30));
+                if (!_quitting && (Settings.UseDeskShellFiles || Settings.FileSearch)) Files.FilesHost.Preload();
             });
         TrimMemorySoon(TimeSpan.FromSeconds(15));
     }
@@ -257,6 +260,7 @@ public partial class App : Application
         _hotkeys.Register(Settings.OverviewHotkey, () => Overview.Toggle());
         _hotkeys.Register(Settings.AppDrawerHotkey, ToggleAppDrawer);
         _hotkeys.Register(Settings.QuitHotkey, Quit);
+        if (!string.IsNullOrWhiteSpace(Settings.SearchHotkey)) _hotkeys.Register(Settings.SearchHotkey, () => OpenFileSearch());
     }
 
     /// <summary>Called by the settings window after saving.</summary>
@@ -284,6 +288,8 @@ public partial class App : Application
         StartupRegistration.Apply(Settings.StartWithWindows);
         ApplyFolderHandler();
         ApplyBanners();
+        // The explorer's process keeps the file index; it follows the setting from settings.json once it runs.
+        if (Settings.FileSearch && !GameMode.Active) Files.FilesHost.Preload();
         _shellWindow?.UpdateHint();
         if (taskbarChanged) ApplyWindowsTaskbar();
         if (dockChanged) RebuildBars("settings changed");
@@ -555,6 +561,14 @@ public partial class App : Application
         }
         var explorer = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
         ToolsMenu.Run(explorer, args: select != null ? $"/select,\"{select}\"" : path != null ? $"\"{path}\"" : null);
+    }
+
+    /// <summary>Search files (every file and folder, as you type). <paramref name="text"/> starts it with a search; without, the hotkey toggles it.</summary>
+    public void OpenFileSearch(string? text = null)
+    {
+        HideShell();
+        _drawer?.CloseDrawer();
+        Files.FilesHost.OpenSearch(text);
     }
 
     /// <summary>Windows' own notification banners are off only while the notch shows notifications instead.</summary>

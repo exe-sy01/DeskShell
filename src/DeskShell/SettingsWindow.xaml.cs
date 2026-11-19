@@ -36,6 +36,8 @@ public partial class SettingsWindow : Window
         UseDeskShellTaskManager.IsChecked = _draft.UseDeskShellTaskManager;
         UseDeskShellFiles.IsChecked = _draft.UseDeskShellFiles;
         OpenAllFoldersInDeskShell.IsChecked = _draft.OpenAllFoldersInDeskShell;
+        FileSearch.IsChecked = _draft.FileSearch;
+        SearchHotkey.Text = _draft.SearchHotkey;
         IslandAppsButton.IsChecked = _draft.Island.AppsButton;
         IslandDiscordMessages.IsChecked = _draft.Island.DiscordMessages;
         QuitHotkey.Text = _draft.QuitHotkey;
@@ -378,6 +380,8 @@ public partial class SettingsWindow : Window
         _draft.UseDeskShellTaskManager = UseDeskShellTaskManager.IsChecked == true;
         _draft.UseDeskShellFiles = UseDeskShellFiles.IsChecked == true;
         _draft.OpenAllFoldersInDeskShell = OpenAllFoldersInDeskShell.IsChecked == true;
+        _draft.FileSearch = FileSearch.IsChecked == true;
+        _draft.SearchHotkey = SearchHotkey.Text.Trim().Length == 0 ? "" : Hotkey(SearchHotkey, "Search-files");
         _draft.Island.AppsButton = IslandAppsButton.IsChecked == true;
         _draft.Island.DiscordMessages = IslandDiscordMessages.IsChecked == true;
         _draft.QuitHotkey = Hotkey(QuitHotkey, "Quit");
