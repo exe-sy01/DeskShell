@@ -97,7 +97,7 @@ sealed class HomePage(NotchContext c) : NotchPage(c)
         Place(grid, ScreenTimeCard(), 0, 0);
         Place(grid, SystemCard(), 0, 1);
         Place(grid, WeatherCard(), 0, 2);
-        Place(grid, FocusCard(), 1, 0);
+        Place(grid, VoicemeeterCard(), 1, 0);
         Place(grid, MusicCard(), 1, 1);
         Place(grid, NotesCard(), 1, 2);
         return grid;
@@ -242,29 +242,141 @@ sealed class HomePage(NotchContext c) : NotchPage(c)
         return UI.CardBox("", "Weather", body, () => Context.ShowTab("weather"));
     }
 
-    UIElement FocusCard()
+    sealed class VmRow
     {
-        var time = UI.Label("", 27, bold: true, font: UI.Display);
-        var status = UI.Label("", 12, brush: UI.Dim);
-        var left = new StackPanel();
-        left.Children.Add(time);
-        left.Children.Add(status);
-        var playGlyph = "";
-        var play = UI.Round(playGlyph, 40, FocusTimer.Toggle, "Start or pause");
-        play.HorizontalAlignment = HorizontalAlignment.Right;
-        play.VerticalAlignment = VerticalAlignment.Bottom;
-        var body = new Grid { Children = { left, play } };
+        public required VmChannel Channel;
+        public required Fader Fader;
+        public required Border MuteBg;
+        public required TextBlock MuteGlyph;
+    }
 
-        void Update()
+    Task _vmWrites = Task.CompletedTask;
+
+    /// <summary>Changes go to Voicemeeter off the UI thread, in order (a fader sends many).</summary>
+    void VmWrite(Action change) => _vmWrites = _vmWrites.ContinueWith(_ =>
+    {
+        try { change(); }
+        catch (Exception ex) { Log.Error("Voicemeeter change failed", ex); }
+    }, TaskScheduler.Default);
+
+    /// <summary>Voicemeeter's virtual inputs (VAIO, AUX, VAIO3): a fader with a level meter and mute each.</summary>
+    UIElement VoicemeeterCard()
+    {
+        var rows = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var list = new List<VmRow>();
+        var layout = "";
+        var reads = 0;
+        System.Windows.Threading.DispatcherTimer? meters = null;
+        var mutedRed = UI.Frozen(Color.FromRgb(0xE0, 0x3C, 0x3C));
+
+        void ShowMute(VmRow row)
         {
-            time.Text = FocusTimer.Text;
-            time.Foreground = FocusTimer.Running ? Context.Accent() : UI.Text;
-            status.Text = FocusTimer.Status;
-            ((TextBlock)((Border)play.Content).Child).Text = FocusTimer.Running ? "" : "";
+            row.MuteBg.Background = row.Channel.Muted ? mutedRed : UI.Raised;
+            row.MuteGlyph.Text = row.Channel.Muted ? "" : "";
+            row.Fader.Muted = row.Channel.Muted;
         }
-        FocusTimer.Changed += Update;
+
+        void Show(VmRow row, VmChannel channel)
+        {
+            if (row.Fader.Dragging) channel = channel with { Gain = row.Channel.Gain };
+            row.Channel = channel;
+            row.Fader.Fill = Context.Accent();
+            row.Fader.Value = channel.Gain;
+            row.Fader.ToolTip = $"{channel.Name}: {(Math.Abs(channel.Gain) < 0.05 ? "0" : channel.Gain.ToString("+0.0;-0.0"))} dB · drag or scroll, double-click for 0 dB";
+            ShowMute(row);
+        }
+
+        UIElement Row(VmChannel channel)
+        {
+            var name = UI.Label(channel.Name, 12, bold: true);
+            name.TextTrimming = TextTrimming.CharacterEllipsis;
+            name.VerticalAlignment = VerticalAlignment.Center;
+            var fader = new Fader { Horizontal = true, Height = 24, Margin = new Thickness(6, 0, 6, 0) };
+            var glyph = UI.Glyph("", 11);
+            var bg = new Border { Width = 28, Height = 22, CornerRadius = new CornerRadius(7), Background = UI.Raised, Child = glyph };
+            var mute = new Button { Content = bg, Template = UI.Bare(), Cursor = Cursors.Hand, Focusable = false, VerticalAlignment = VerticalAlignment.Center };
+            System.Windows.Automation.AutomationProperties.SetName(mute, $"Mute {channel.Name}");
+            var row = new VmRow { Channel = channel, Fader = fader, MuteBg = bg, MuteGlyph = glyph };
+            fader.Changed += value =>
+            {
+                row.Channel = row.Channel with { Gain = (float)value };
+                var ch = row.Channel;
+                VmWrite(() => VoicemeeterService.SetGain(ch, (float)value));
+            };
+            mute.Click += (_, _) =>
+            {
+                row.Channel = row.Channel with { Muted = !row.Channel.Muted };
+                ShowMute(row);
+                var ch = row.Channel;
+                VmWrite(() => VoicemeeterService.SetMuted(ch, ch.Muted));
+            };
+            Show(row, channel);
+            list.Add(row);
+            var grid = new Grid { Margin = new Thickness(0, 1, 0, 1) };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(58) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition());
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(fader, 1);
+            Grid.SetColumn(mute, 2);
+            grid.Children.Add(name);
+            grid.Children.Add(fader);
+            grid.Children.Add(mute);
+            return grid;
+        }
+
+        void Meters(bool on)
+        {
+            if (!on || list.Count == 0) { meters?.Stop(); return; }
+            meters ??= new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(66), System.Windows.Threading.DispatcherPriority.Render, (_, _) =>
+            {
+                foreach (var row in list) row.Fader.Level = VoicemeeterService.Level(row.Channel);
+            }, Application.Current.Dispatcher);
+            meters.Start();
+        }
+        rows.IsVisibleChanged += (_, _) => Meters(rows.IsVisible);
+
+        async void Update()
+        {
+            var read = ++reads;
+            List<VmChannel> channels;
+            try { channels = await Task.Run(() => VoicemeeterService.Channels().Where(ch => !ch.IsBus).ToList()); }
+            catch (Exception ex)
+            {
+                Log.Error("Couldn't read Voicemeeter", ex);
+                return;
+            }
+            if (read != reads) return;
+            var now = string.Join("|", channels.Select(ch => $"{ch.Param}:{ch.Name}"));
+            if (now != layout || channels.Count == 0)
+            {
+                layout = now;
+                rows.Children.Clear();
+                list.Clear();
+                if (channels.Count == 0)
+                {
+                    var installed = VoicemeeterService.Installed;
+                    rows.Children.Add(UI.Label(installed ? "Not running" : "Not installed", 13, bold: true));
+                    if (installed)
+                    {
+                        var start = UI.Pill("Start Voicemeeter", () => VoicemeeterService.Open(), "");
+                        start.HorizontalAlignment = HorizontalAlignment.Left;
+                        start.Margin = new Thickness(0, 8, 0, 0);
+                        rows.Children.Add(start);
+                    }
+                    Meters(false);
+                    return;
+                }
+                foreach (var channel in channels.Take(3)) rows.Children.Add(Row(channel));
+            }
+            else
+            {
+                for (var i = 0; i < list.Count && i < channels.Count; i++) Show(list[i], channels[i]);
+            }
+            Meters(rows.IsVisible);
+        }
         _refresh.Add(Update);
-        return UI.CardBox("", "Focus", body, () => Context.ShowTab("focus"));
+        _tick.Add(Update);
+        return UI.CardBox("", "Voicemeeter", rows, () => Context.ShowTab("voicemeeter"));
     }
 
     /// <summary>What's playing, with its cover and back / play-pause / next.</summary>

@@ -314,6 +314,15 @@ sealed class Fader : FrameworkElement
         }
     }
 
+    bool _horizontal;
+
+    /// <summary>Lies on its side: quiet on the left, loud on the right, with the meter underneath.</summary>
+    public bool Horizontal
+    {
+        get => _horizontal;
+        set { _horizontal = value; Cursor = value ? Cursors.SizeWE : Cursors.SizeNS; InvalidateVisual(); }
+    }
+
     public Fader()
     {
         Cursor = Cursors.SizeNS;
@@ -321,12 +330,18 @@ sealed class Fader : FrameworkElement
         ToolTip = "Drag or scroll · double-click for 0 dB";
     }
 
-    double Track => Math.Max(1, ActualHeight - 2 * Pad);
+    double Track => Math.Max(1, (_horizontal ? ActualWidth : ActualHeight) - 2 * Pad);
     double Y(double v) => ActualHeight - Pad - (v - Min) / (Max - Min) * Track;
+    double X(double v) => Pad + (v - Min) / (Max - Min) * Track;
 
     protected override void OnRender(DrawingContext dc)
     {
         dc.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, ActualWidth, ActualHeight)); // the whole box takes the mouse
+        if (_horizontal)
+        {
+            RenderHorizontal(dc);
+            return;
+        }
         var x = ActualWidth / 2 - 4;
         var top = Pad;
         var bottom = ActualHeight - Pad;
@@ -348,10 +363,28 @@ sealed class Fader : FrameworkElement
         dc.DrawEllipse(UI.Text, null, new Point(x, y), 8, 8);
     }
 
+    void RenderHorizontal(DrawingContext dc)
+    {
+        var y = ActualHeight / 2 - 3;
+        var left = Pad;
+        var x = X(_value);
+        dc.DrawRoundedRectangle(UI.Raised, null, new Rect(left, y - 2.5, Track, 5), 2.5, 2.5);
+        dc.DrawRoundedRectangle(_muted ? UI.Faint : Fill, null, new Rect(left, y - 2.5, Math.Max(0, x - left), 5), 2.5, 2.5);
+        var zero = X(0);
+        dc.DrawRectangle(UI.Dim, null, new Rect(zero - 0.5, y - 8, 1, 3));
+
+        var meterY = y + 7;
+        dc.DrawRoundedRectangle(UI.Raised, null, new Rect(left, meterY, Track, 3), 1.5, 1.5);
+        if (_shown > 0.001)
+            dc.DrawRoundedRectangle(_muted ? UI.Faint : _shown > 0.93 ? Red : _shown > 0.8 ? Amber : Green, null, new Rect(left, meterY, _shown * Track, 3), 1.5, 1.5);
+
+        dc.DrawEllipse(UI.Text, null, new Point(x, y), 7, 7);
+    }
+
     void SetFromMouse(MouseEventArgs e)
     {
-        var y = e.GetPosition(this).Y;
-        var v = Min + (ActualHeight - Pad - y) / Track * (Max - Min);
+        var p = e.GetPosition(this);
+        var v = _horizontal ? Min + (p.X - Pad) / Track * (Max - Min) : Min + (ActualHeight - Pad - p.Y) / Track * (Max - Min);
         v = Math.Round(v * 2) / 2;
         if (Math.Abs(v) < 0.75) v = 0; // 0 dB is easy to land on
         Set(v);
@@ -385,10 +418,10 @@ sealed class Fader : FrameworkElement
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
+        e.Handled = true; // never a click on whatever holds the fader (Home's card opens its tab on a click)
         if (!Dragging) return;
         Dragging = false;
         ReleaseMouseCapture();
-        e.Handled = true;
     }
 
     protected override void OnLostMouseCapture(MouseEventArgs e) => Dragging = false;
