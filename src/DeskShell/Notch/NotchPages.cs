@@ -20,6 +20,8 @@ sealed class NotchContext
     public required Action Collapse { get; init; }
     /// <summary>Lets the notch take keyboard focus (it normally never does, so the app you're in keeps it).</summary>
     public required Action Activate { get; init; }
+    /// <summary>A tray app (its icon's window) is about to show its own menu: stay open, below it.</summary>
+    public required Action<IntPtr> BeginAppMenu { get; init; }
 }
 
 /// <summary>One page of the panel: Home's cards, or one of the tabs' bigger views.</summary>

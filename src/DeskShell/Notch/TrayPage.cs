@@ -140,8 +140,10 @@ sealed class TrayPage(NotchContext c) : NotchPage(c)
         {
             if (e.ChangedButton is not (MouseButton.Left or MouseButton.Right or MouseButton.Middle)) return;
             e.Handled = true;
-            // Out of the way first, so the app's window or menu isn't behind the panel.
-            Context.Collapse();
+            // Right-click: the app's menu, with the panel staying open just below it.
+            // Otherwise the app usually opens its window: get out of its way.
+            if (e.ChangedButton == MouseButton.Right) Context.BeginAppMenu(icon.HWnd);
+            else Context.Collapse();
             icon.IconMouseUp(e.ChangedButton, MouseHelper.GetCursorPositionParam(), (int)Native.GetDoubleClickTime());
         };
         return button;
