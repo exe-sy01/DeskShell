@@ -119,7 +119,7 @@ sealed class VoicemeeterPage(NotchContext c) : NotchPage(c)
         }
         _edition.Text = edition;
         var inputs = channels.Count(ch => !ch.IsBus);
-        _status.Text = $"{inputs} inputs · {channels.Count - inputs} outputs · scroll for more";
+        _status.Text = $"{inputs} inputs · {channels.Count - inputs} outputs";
         _actions.Children.Add(UI.Pill("Restart audio engine", () => Write(VoicemeeterService.RestartEngine), ""));
         _actions.Children.Add(UI.Pill("Open Voicemeeter", () => { Context.Collapse(); VoicemeeterService.Open(); }, ""));
 
@@ -165,14 +165,14 @@ sealed class VoicemeeterPage(NotchContext c) : NotchPage(c)
         name.ToolTip = channel.Name == channel.Key ? channel.Name : $"{channel.Name} ({channel.Key})";
         var db = UI.Label("", 11, brush: UI.Dim);
         db.HorizontalAlignment = HorizontalAlignment.Center;
-        var fader = new Fader { Width = 44, Height = channel.IsBus ? 150 : 100, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 4) };
+        var fader = new Fader { Width = 44, Height = channel.IsBus ? 128 : 84, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 4) };
 
         var muteGlyph = UI.Glyph("", 12);
         var muteBg = new Border { Width = 30, Height = 24, CornerRadius = new CornerRadius(8), Background = UI.Raised, Child = muteGlyph };
         var mute = new Button { Content = muteBg, Template = UI.Bare(), Cursor = Cursors.Hand, Focusable = false, HorizontalAlignment = HorizontalAlignment.Center };
         System.Windows.Automation.AutomationProperties.SetName(mute, $"Mute {channel.Name}");
 
-        var stack = new StackPanel { Width = 86 };
+        var stack = new StackPanel { Width = channel.IsBus ? 80 : 96 };
         stack.Children.Add(name);
         stack.Children.Add(db);
         stack.Children.Add(fader);
@@ -181,13 +181,14 @@ sealed class VoicemeeterPage(NotchContext c) : NotchPage(c)
 
         if (channel.Routes.Count > 0)
         {
-            var routes = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(3, 6, 0, 0), MaxWidth = 82 };
+            // Four to a row, so even Potato's eight outputs take two rows.
+            var routes = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(2, 6, 0, 0), MaxWidth = 92 };
             foreach (var (bus, _) in channel.Routes)
             {
                 var text = UI.Label(bus, 10, bold: true);
                 text.HorizontalAlignment = HorizontalAlignment.Center;
                 text.VerticalAlignment = VerticalAlignment.Center;
-                var chip = new Border { Width = 24, Height = 18, CornerRadius = new CornerRadius(6), Margin = new Thickness(0, 0, 3, 3), Child = text };
+                var chip = new Border { Width = 21, Height = 17, CornerRadius = new CornerRadius(5), Margin = new Thickness(0, 0, 2, 2), Child = text };
                 var button = new Button { Content = chip, Template = UI.Bare(), Cursor = Cursors.Hand, Focusable = false };
                 System.Windows.Automation.AutomationProperties.SetName(button, $"Send {channel.Name} to {bus}");
                 var target = bus;
