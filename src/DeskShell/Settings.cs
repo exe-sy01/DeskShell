@@ -180,7 +180,7 @@ public sealed class Settings
     public bool OpenAllFoldersInDeskShell { get; set; }
     /// <summary>Search files: an index of every file and folder name on the NTFS drives, kept current (off deletes it).</summary>
     public bool FileSearch { get; set; } = true;
-    public string SearchHotkey { get; set; } = "Ctrl+Alt+F";
+    public string SearchHotkey { get; set; } = "Alt+F";
     /// <summary>Apps opened from the drawer, most recent first.</summary>
     public List<string> RecentApps { get; set; } = new();
 
@@ -380,6 +380,12 @@ public sealed class Settings
                 var after = Notch.Tabs.IndexOf("notifications");
                 Notch.Tabs.Insert(after >= 0 ? after + 1 : Math.Min(1, Notch.Tabs.Count), "tray");
             }
+        }
+        // Search files moved from Ctrl+Alt+F (its first default) to Alt+F.
+        if (!Migrations.Contains("search-alt-f"))
+        {
+            Migrations.Add("search-alt-f");
+            if (SearchHotkey == "Ctrl+Alt+F") SearchHotkey = "Alt+F";
         }
     }
 
