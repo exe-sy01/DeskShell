@@ -386,7 +386,8 @@ public sealed class NotchWindow : Window
             Accent = () => _accent,
             ShowTab = ShowTab,
             Collapse = () => Collapse(),
-            Activate = TakeFocus
+            Activate = TakeFocus,
+            BeginAppMenu = BeginAppMenu
         };
 
         _glowWin = new NotchGlow(UI.Parse(_style.GlowColor, Color.FromRgb(0xE0, 0x40, 0xFB)));
@@ -474,7 +475,7 @@ public sealed class NotchWindow : Window
     }
 
     /// <summary>A menu or the colour picker is open, or you're typing in the panel: don't fold away.</summary>
-    bool KeepOpen => _menuOpen || _colours.IsOpen || (IsActive && Keyboard.FocusedElement is TextBox);
+    bool KeepOpen => _menuOpen || _appMenu || _colours.IsOpen || (IsActive && Keyboard.FocusedElement is TextBox);
 
     // ---------- the shape and its glow ----------
 
@@ -933,6 +934,87 @@ public sealed class NotchWindow : Window
         };
         BeginAnimation(ProgressProperty, close);
     }
+
+    // ---------- a tray app's own menu ----------
+
+    bool _appMenu;
+    uint _appMenuPid;
+    DateTime _appMenuSince;
+    DispatcherTimer? _appMenuWatch;
+
+    /// <summary>
+    /// A tray app (Background apps tab) is about to show its menu. Many of those menus aren't
+    /// "always on top", so they'd open behind the panel: drop below them and stay open while the menu is up.
+    /// </summary>
+    void BeginAppMenu(IntPtr owner)
+    {
+        WindowManagement.WmNative.GetWindowThreadProcessId(owner, out _appMenuPid);
+        _appMenu = true;
+        _appMenuSince = DateTime.UtcNow;
+        _leaveTimer.Stop();
+        Topmost = false;
+        _appMenuWatch ??= new DispatcherTimer(TimeSpan.FromMilliseconds(150), DispatcherPriority.Normal, (_, _) => WatchAppMenu(), Dispatcher);
+        _appMenuWatch.Start();
+    }
+
+    void WatchAppMenu()
+    {
+        var foreground = WindowManagement.WmNative.GetForegroundWindow();
+        if (foreground == new WindowInteropHelper(this).Handle)
+        {
+            EndAppMenu(); // the menu closed and you're back in the panel
+            return;
+        }
+        WindowManagement.WmNative.GetWindowThreadProcessId(foreground, out var pid);
+        var opened = pid == _appMenuPid && IsAppWindow(foreground);
+        var waited = DateTime.UtcNow - _appMenuSince;
+        // The menu is still up (or the app is still getting to it).
+        if (!opened && waited < TimeSpan.FromMinutes(2) && (MenuShowing(_appMenuPid) || waited < TimeSpan.FromSeconds(1.5))) return;
+        EndAppMenu();
+        // The app opened its window, or you clicked away from the menu: get out of the way.
+        if (opened || !IsMouseOver) Collapse(giveFocusBack: false);
+    }
+
+    void EndAppMenu()
+    {
+        if (!_appMenu) return;
+        _appMenu = false;
+        _appMenuWatch?.Stop();
+        Topmost = true;
+    }
+
+    /// <summary>A normal app window, as opposed to a menu, popup or an app's hidden helper window.</summary>
+    bool IsAppWindow(IntPtr hwnd)
+    {
+        if (_context.Shell.Tasks.GroupedWindows?.OfType<ManagedShell.WindowsTasks.ApplicationWindow>().Any(w => w.Handle == hwnd) == true) return true;
+        if (!WindowManagement.WmNative.IsWindowVisible(hwnd)) return false;
+        var style = WindowManagement.WmNative.GetWindowLongPtr(hwnd, -16 /* GWL_STYLE */).ToInt64();
+        var exStyle = WindowManagement.WmNative.GetWindowLongPtr(hwnd, WindowManagement.WmNative.GWL_EXSTYLE).ToInt64();
+        const long WS_CAPTION = 0x00C00000;
+        return (style & WS_CAPTION) == WS_CAPTION && (exStyle & WindowManagement.WmNative.WS_EX_TOOLWINDOW) == 0;
+    }
+
+    /// <summary>Whether the app has a menu on screen: a visible, always-on-top popup window of its own.</summary>
+    static bool MenuShowing(uint pid)
+    {
+        var found = false;
+        EnumWindows((hwnd, _) =>
+        {
+            if (!WindowManagement.WmNative.IsWindowVisible(hwnd)) return true;
+            WindowManagement.WmNative.GetWindowThreadProcessId(hwnd, out var owner);
+            if (owner != pid) return true;
+            var style = WindowManagement.WmNative.GetWindowLongPtr(hwnd, -16).ToInt64();
+            var exStyle = WindowManagement.WmNative.GetWindowLongPtr(hwnd, WindowManagement.WmNative.GWL_EXSTYLE).ToInt64();
+            const long WS_POPUP = 0x80000000, WS_EX_TOPMOST = 0x8;
+            if ((style & WS_POPUP) == 0 || (exStyle & WS_EX_TOPMOST) == 0) return true;
+            found = true;
+            return false;
+        }, IntPtr.Zero);
+        return found;
+    }
+
+    delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
 
     /// <summary>Typing in the panel: take the keyboard (and give it back to your app when the panel closes).</summary>
     void TakeFocus()
