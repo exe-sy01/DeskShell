@@ -385,6 +385,16 @@ public sealed class Settings
                 Notch.Tabs.Insert(after >= 0 ? after + 1 : Math.Min(1, Notch.Tabs.Count), "tray");
             }
         }
+        // A Voicemeeter tab next to Music, if Voicemeeter is installed.
+        if (!Migrations.Contains("notch-voicemeeter"))
+        {
+            Migrations.Add("notch-voicemeeter");
+            if (DeskShell.Services.VoicemeeterService.Installed && !Notch.Tabs.Contains("voicemeeter"))
+            {
+                var music = Notch.Tabs.IndexOf("media");
+                Notch.Tabs.Insert(music >= 0 ? music + 1 : Notch.Tabs.Count, "voicemeeter");
+            }
+        }
         // Search files moved from Ctrl+Alt+F (its first default) to Alt+F.
         if (!Migrations.Contains("search-alt-f"))
         {

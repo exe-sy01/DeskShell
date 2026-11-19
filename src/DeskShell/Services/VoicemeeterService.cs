@@ -6,7 +6,15 @@ namespace DeskShell.Services;
 
 /// <summary>A Voicemeeter virtual input (a Windows playback device such as VAIO) or bus (output).</summary>
 /// <remarks>Key is the default name (VAIO, AUX, VAIO3, A1, B1…); Name is the user's label if they set one.</remarks>
-public sealed record VmChannel(string Param, string Key, string Name, bool IsBus, float Gain, bool Muted);
+public sealed record VmChannel(string Param, string Key, string Name, bool IsBus, float Gain, bool Muted)
+{
+    /// <summary>A hardware input (microphone, line-in) rather than a virtual one.</summary>
+    public bool Hardware { get; init; }
+    /// <summary>Its number among the strips or buses (for level meters).</summary>
+    public int Index { get; init; }
+    /// <summary>For inputs: which outputs (A1, B1…) it's sent to.</summary>
+    public IReadOnlyList<(string Bus, bool On)> Routes { get; init; } = [];
+}
 
 /// <summary>
 /// Controls Voicemeeter through its official remote API (VoicemeeterRemote64.dll, installed with
@@ -90,42 +98,148 @@ public static class VoicemeeterService
         catch { return 0; }
     }
 
-    public static List<VmChannel> Channels()
+    /// <summary>
+    /// The virtual inputs (VAIO, AUX, VAIO3) and the outputs in use. With <paramref name="everything"/>, also the
+    /// hardware inputs that have a device, and each input's routing to the outputs.
+    /// </summary>
+    public static List<VmChannel> Channels(bool everything = false)
     {
-        lock (Gate) return ReadChannels();
+        lock (Gate) return ReadChannels(everything);
     }
 
-    static List<VmChannel> ReadChannels()
+    /// <summary>"Voicemeeter", "Voicemeeter Banana" or "Voicemeeter Potato"; null when it isn't running.</summary>
+    public static string? Edition
+    {
+        get
+        {
+            lock (Gate)
+                return !Connect() ? null : TypeNow() switch { 1 => "Voicemeeter", 2 => "Voicemeeter Banana", 3 => "Voicemeeter Potato", _ => null };
+        }
+    }
+
+    static (int Strips, int HardwareStrips, int Buses, int HardwareBuses) Layout() => TypeNow() switch
+    {
+        1 => (3, 2, 2, 1),
+        2 => (5, 3, 5, 3),
+        _ => (8, 5, 8, 5)
+    };
+
+    static string BusKey(int i, int hardwareBuses) => i < hardwareBuses ? $"A{i + 1}" : $"B{i - hardwareBuses + 1}";
+
+    static List<VmChannel> ReadChannels(bool everything)
     {
         var list = new List<VmChannel>();
         if (!IsAvailable) return list;
         _dirty?.Invoke(); // refreshes Voicemeeter's parameter snapshot
-        var (strips, buses) = TypeNow() switch
-        {
-            1 => (3, 2),
-            2 => (5, 5),
-            _ => (8, 8)
-        };
-        // Only the virtual strips: they're the playback devices Windows apps send sound to
-        // (VAIO, AUX, VAIO3). The hardware strips are microphones and line-ins.
-        var virtualStart = TypeNow() switch { 1 => 2, 2 => 3, _ => 5 };
+        var (strips, virtualStart, buses, hardwareBuses) = Layout();
+        var busKeys = Enumerable.Range(0, buses).Select(i => BusKey(i, hardwareBuses)).ToList();
+
+        IReadOnlyList<(string, bool)> Routes(string param) =>
+            everything ? busKeys.Select(b => (b, Float($"{param}.{b}") > 0.5f)).ToList() : [];
+
+        // The hardware strips are microphones and line-ins: only on the Voicemeeter tab, and only ones with a device.
+        if (everything)
+            for (var i = 0; i < virtualStart; i++)
+            {
+                var param = $"Strip[{i}]";
+                if (String($"{param}.device.name") is "") continue;
+                list.Add(new VmChannel(param, $"IN{i + 1}", Label(param, $"Input {i + 1}"), false, Float($"{param}.Gain"), Float($"{param}.Mute") > 0.5f)
+                    { Hardware = true, Index = i, Routes = Routes(param) });
+            }
+        // The virtual strips: the playback devices Windows apps send sound to (VAIO, AUX, VAIO3).
         string[] virtualNames = ["VAIO", "AUX", "VAIO3"];
         for (var i = virtualStart; i < strips; i++)
         {
             var param = $"Strip[{i}]";
             var key = virtualNames[i - virtualStart];
-            list.Add(new VmChannel(param, key, Label(param, key), false, Float($"{param}.Gain"), Float($"{param}.Mute") > 0.5f));
+            list.Add(new VmChannel(param, key, Label(param, key), false, Float($"{param}.Gain"), Float($"{param}.Mute") > 0.5f)
+                { Index = i, Routes = Routes(param) });
         }
-        var hardwareBuses = TypeNow() switch { 1 => 1, 2 => 3, _ => 5 };
         for (var i = 0; i < buses; i++)
         {
             var param = $"Bus[{i}]";
             // Skip hardware outputs with no device picked in Voicemeeter
             if (i < hardwareBuses && String($"{param}.device.name") is "") continue;
-            var fallback = i < hardwareBuses ? $"A{i + 1}" : $"B{i - hardwareBuses + 1}";
-            list.Add(new VmChannel(param, fallback, Label(param, fallback), true, Float($"{param}.Gain"), Float($"{param}.Mute") > 0.5f));
+            var fallback = busKeys[i];
+            list.Add(new VmChannel(param, fallback, Label(param, fallback), true, Float($"{param}.Gain"), Float($"{param}.Mute") > 0.5f)
+                { Hardware = i < hardwareBuses, Index = i });
         }
         return list;
+    }
+
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int GetLevelFn(int type, int channel, out float value);
+    static GetLevelFn? _getLevel;
+
+    /// <summary>
+    /// How loud a strip (after its fader) or bus is right now, as an amplitude (1 = full scale): the louder of
+    /// its first two channels. Cheap: Voicemeeter keeps these in shared memory.
+    /// </summary>
+    public static float Level(VmChannel channel)
+    {
+        lock (Gate)
+        {
+            if (!_loggedIn || _dll == IntPtr.Zero) return 0;
+            try
+            {
+                _getLevel ??= Marshal.GetDelegateForFunctionPointer<GetLevelFn>(NativeLibrary.GetExport(_dll, "VBVMR_GetLevel"));
+                var (_, hardwareStrips, _, _) = Layout();
+                // Hardware strips have 2 channels each, virtual strips and buses 8.
+                var (type, first) = channel.IsBus ? (3, channel.Index * 8)
+                    : channel.Index < hardwareStrips ? (1, channel.Index * 2)
+                    : (1, hardwareStrips * 2 + (channel.Index - hardwareStrips) * 8);
+                var left = _getLevel(type, first, out var l) == 0 ? l : 0;
+                var right = _getLevel(type, first + 1, out var r) == 0 ? r : 0;
+                return Math.Max(left, right);
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+    }
+
+    /// <summary>Sends an input to an output (A1, B1…), or stops sending it.</summary>
+    public static void SetRoute(VmChannel channel, string bus, bool on)
+    {
+        try { lock (Gate) _setFloat?.Invoke($"{channel.Param}.{bus}", on ? 1f : 0f); }
+        catch (Exception ex) { Log.Error("Voicemeeter routing change failed", ex); }
+    }
+
+    /// <summary>Restarts Voicemeeter's audio engine (the fix for crackling or a device that went missing).</summary>
+    public static void RestartEngine()
+    {
+        try { lock (Gate) _setFloat?.Invoke("Command.Restart", 1f); }
+        catch (Exception ex) { Log.Error("Voicemeeter engine restart failed", ex); }
+    }
+
+    /// <summary>Voicemeeter is installed (whether or not it's running).</summary>
+    public static bool Installed => DllPath() != null;
+
+    /// <summary>Starts Voicemeeter, or brings its window up if it's running (it only runs once).</summary>
+    public static bool Open()
+    {
+        var folder = DllPath() is { } dll ? Path.GetDirectoryName(dll) : null;
+        if (folder == null) return false;
+        // The richest edition installed (they all install together), matching the one running if any.
+        var running = TypeNow();
+        string[] potato = ["voicemeeter8x64.exe", "voicemeeter8.exe"], banana = ["voicemeeterpro_x64.exe", "voicemeeterpro.exe"], basic = ["voicemeeter_x64.exe", "voicemeeter.exe"];
+        var order = running switch { 1 => basic, 2 => banana, 3 => potato, _ => [.. potato, .. banana, .. basic] };
+        foreach (var name in order)
+        {
+            var exe = Path.Combine(folder, name);
+            if (!File.Exists(exe)) continue;
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true });
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Couldn't start Voicemeeter", ex);
+                return false;
+            }
+        }
+        return false;
     }
 
     static float Float(string name)
