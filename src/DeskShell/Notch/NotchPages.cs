@@ -97,7 +97,7 @@ sealed class HomePage(NotchContext c) : NotchPage(c)
         Place(grid, SystemCard(), 0, 1);
         Place(grid, WeatherCard(), 0, 2);
         Place(grid, FocusCard(), 1, 0);
-        Place(grid, ClipboardCard(), 1, 1);
+        Place(grid, MusicCard(), 1, 1);
         Place(grid, NotesCard(), 1, 2);
         return grid;
     }
@@ -266,26 +266,41 @@ sealed class HomePage(NotchContext c) : NotchPage(c)
         return UI.CardBox("", "Focus", body, () => Context.ShowTab("focus"));
     }
 
-    UIElement ClipboardCard()
+    /// <summary>What's playing, with its cover and back / play-pause / next.</summary>
+    UIElement MusicCard()
     {
-        var list = new StackPanel();
+        const double size = 46;
+        var art = new Border { Width = size, Height = size, CornerRadius = new CornerRadius(10), Background = UI.Raised, VerticalAlignment = VerticalAlignment.Top };
+        var title = UI.Label("", 13, bold: true);
+        var artist = UI.Label("", 12, brush: UI.Dim);
+        title.TextTrimming = artist.TextTrimming = TextTrimming.CharacterEllipsis;
+        var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(11, 0, 0, 0), Children = { title, artist } };
+        var top = new DockPanel { VerticalAlignment = VerticalAlignment.Top };
+        DockPanel.SetDock(art, Dock.Left);
+        top.Children.Add(art);
+        top.Children.Add(words);
 
-        void Update()
+        var play = UI.Round("", 34, () => _ = Context.Media.PlayPauseAsync(), "Play or pause", light: true);
+        var back = UI.Round("", 28, () => _ = Context.Media.PreviousAsync(), "Previous");
+        var next = UI.Round("", 28, () => _ = Context.Media.NextAsync(), "Next");
+        back.Margin = new Thickness(0, 3, 8, 0);
+        next.Margin = new Thickness(8, 3, 0, 0);
+        var controls = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Children = { back, play, next } };
+        var body = new Grid { Children = { top, controls } };
+
+        async void Update()
         {
-            list.Children.Clear();
-            var items = Context.Clipboard.Items.Take(2).ToList();
-            if (items.Count == 0)
-            {
-                list.Children.Add(UI.Label("Nothing copied yet", 12.5, bold: true));
-                list.Children.Add(UI.Label("Copy some text and it shows here", 12, brush: UI.Dim));
-                return;
-            }
-            for (var i = 0; i < items.Count; i++)
-                list.Children.Add(ClipRow(Context.Clipboard, items[i], i == 0 ? UI.Ago(Context.Clipboard.LastCopied) : ""));
+            var now = await Context.Media.GetAsync();
+            title.Text = now?.Title ?? "Nothing playing";
+            artist.Text = now == null ? "Play something in any app" : now.Artist;
+            art.Child = now?.Art != null
+                ? new Image { Source = now.Art, Stretch = Stretch.UniformToFill, Clip = new RectangleGeometry(new Rect(0, 0, size, size), 10, 10) }
+                : UI.Glyph("", 18, UI.Faint);
+            ((TextBlock)((Border)play.Content).Child).Text = now?.IsPlaying == true ? "" : "";
         }
-        Context.Clipboard.Items.CollectionChanged += (_, _) => Update();
+        Context.Media.Changed += () => Application.Current.Dispatcher.BeginInvoke(() => { if (body.IsVisible) Update(); });
         _refresh.Add(Update);
-        return UI.CardBox("", "Clipboard", list, () => Context.ShowTab("clipboard"));
+        return UI.CardBox("", "Music", body, () => Context.ShowTab("media"));
     }
 
     internal static Grid ClipRow(ClipboardHistory clipboard, string text, string when)
