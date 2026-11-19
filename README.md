@@ -135,3 +135,7 @@ For bug hunting, create an empty file named `debug` in `%LOCALAPPDATA%\DeskShell
 ## Built with
 
 C# / .NET 10 / WPF and [ManagedShell](https://github.com/cairoshell/ManagedShell) (window tracking, tray icons, hiding the Windows taskbar).
+
+## License
+
+[MIT](LICENSE). ManagedShell, which DeskShell builds on, is under its own license (Apache 2.0).
