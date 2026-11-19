@@ -111,6 +111,8 @@ internal static class NotificationReader
     public static Task<List<ToastItem>> ReadAsync(int max = 20) => Task.Run(() =>
     {
         var items = new List<ToastItem>();
+        // Discord's own notifications repeat what the AIChat plugin already shows, with profile pictures.
+        var skipDiscord = DiscordLink.CoversNotifications;
         lock (Gate)
         try
         {
@@ -128,6 +130,7 @@ internal static class NotificationReader
             while (reader.Read())
             {
                 var appId = reader.IsDBNull(0) ? "" : reader.GetString(0);
+                if (skipDiscord && DiscordLink.IsDiscordApp(appId)) continue;
                 var payload = reader.IsDBNull(1) ? "" : PayloadText(reader.GetValue(1));
                 var arrived = reader.IsDBNull(2) ? DateTime.MinValue : DateTime.FromFileTimeUtc(reader.GetInt64(2)).ToLocalTime();
                 var texts = ParseTexts(payload);

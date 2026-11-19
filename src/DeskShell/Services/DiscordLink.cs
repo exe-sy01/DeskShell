@@ -58,6 +58,17 @@ public static class DiscordLink
     static readonly Queue<string> _seenOrder = new();
     static readonly Dictionary<string, ImageSource> AvatarCache = new();
 
+    static volatile bool _inUse;
+
+    /// <summary>
+    /// The AIChat plugin has reported in since DeskShell started and Discord messages are on: it brings DMs and
+    /// mentions with profile pictures, so Discord's own Windows notifications for them would only be repeats.
+    /// </summary>
+    public static bool CoversNotifications => _inUse && App.Settings.Island.DiscordMessages;
+
+    /// <summary>A Windows notification id (AUMID) of Discord, PTB or Canary.</summary>
+    public static bool IsDiscordApp(string appId) => appId.Contains("discord", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>The call you're in, or null.</summary>
     public static VoiceCall? Call { get; private set; }
 
@@ -120,6 +131,7 @@ public static class DiscordLink
                 var origin = await HandshakeAsync(stream, stop);
                 if (origin == null) return;
                 lock (_clients) _clientProcesses[id] = ClientProcess(origin);
+                _inUse = true;
                 Log.Info("Discord connected");
                 await ReadMessagesAsync(stream, text => OnMessage(id, text), stop);
             }
