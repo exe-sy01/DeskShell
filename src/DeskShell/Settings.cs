@@ -156,6 +156,8 @@ public sealed class NotchStyle
     public double PopupSeconds { get; set; } = 6;
     /// <summary>Switch off Windows' own banners for every app while DeskShell runs (they'd show twice otherwise).</summary>
     public bool HideWindowsBanners { get; set; }
+    /// <summary>When a new song starts, it pops out of the notch with back / play-pause / next.</summary>
+    public bool SongPopups { get; set; } = true;
     /// <summary>The Notifications tab's Clear: anything that arrived before this is left off its list.</summary>
     public DateTime NotificationsCleared { get; set; }
     public int FocusMinutes { get; set; } = 25;

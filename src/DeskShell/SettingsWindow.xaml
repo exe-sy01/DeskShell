@@ -117,6 +117,8 @@
                           Content="Notch look: a small clock that opens Home when you rest the mouse on it (off: the classic pill with pages)" />
                 <CheckBox x:Name="HideWindowsBanners" Style="{StaticResource Switch}" Margin="0,4,0,8" IsEnabled="{Binding IsChecked, ElementName=UseNotch}"
                           Content="Notifications pop up only in the notch: switch off Windows' own banners for every app while DeskShell runs" />
+                <CheckBox x:Name="SongPopups" Style="{StaticResource Switch}" Margin="0,4,0,8" IsEnabled="{Binding IsChecked, ElementName=UseNotch}"
+                          Content="When a new song starts, show it in the notch with back, play/pause and next" />
                 <CheckBox x:Name="IslandOnAllMonitors" Style="{StaticResource Switch}" Margin="0,4,0,8" IsEnabled="{Binding IsChecked, ElementName=ShowIsland}"
                           Content="An island on every monitor, each showing its own windows (off: main monitor only)" />
                 <CheckBox x:Name="IslandReserveSpace" Style="{StaticResource Switch}" Margin="0,4,0,8" IsEnabled="{Binding IsChecked, ElementName=ShowIsland}"

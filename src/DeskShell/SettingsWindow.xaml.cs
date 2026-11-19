@@ -47,6 +47,7 @@ public partial class SettingsWindow : Window
         ShowIsland.IsChecked = _draft.ShowIsland;
         UseNotch.IsChecked = _draft.UseNotch;
         HideWindowsBanners.IsChecked = _draft.Notch.HideWindowsBanners;
+        SongPopups.IsChecked = _draft.Notch.SongPopups;
         IslandOnAllMonitors.IsChecked = _draft.IslandOnAllMonitors;
         IslandReserveSpace.IsChecked = _draft.IslandReserveSpace;
         ShowWindowsTaskbar.IsChecked = _draft.ShowWindowsTaskbar;
@@ -393,6 +394,7 @@ public partial class SettingsWindow : Window
         _draft.ShowIsland = ShowIsland.IsChecked == true;
         _draft.IslandLook = UseNotch.IsChecked == true ? "notch" : "pill";
         _draft.Notch.HideWindowsBanners = HideWindowsBanners.IsChecked == true;
+        _draft.Notch.SongPopups = SongPopups.IsChecked == true;
         _draft.IslandOnAllMonitors = IslandOnAllMonitors.IsChecked == true;
         _draft.IslandReserveSpace = IslandReserveSpace.IsChecked == true;
         _draft.ShowWindowsTaskbar = ShowWindowsTaskbar.IsChecked == true;

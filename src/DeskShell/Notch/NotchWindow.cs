@@ -50,6 +50,11 @@ public sealed class NotchWindow : Window
     DispatcherTimer? _popTimer;
     Action? _popClick;
     bool _inPop;
+    // A new song: the pop-up gets back / play-pause / next buttons.
+    readonly StackPanel _popControls = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0), Visibility = Visibility.Collapsed };
+    Button? _popPlay;
+    bool _songPop, _songKnown;
+    string? _songKey;
     /// <summary>How many notches are on screen.</summary>
     static int _open;
 
@@ -66,6 +71,28 @@ public sealed class NotchWindow : Window
         Grid.SetColumn(words, 1);
         _pop.Children.Add(icon);
         _pop.Children.Add(words);
+        _pop.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var back = UI.Round("", 30, () => _ = _media.PreviousAsync(), "Previous");
+        _popPlay = UI.Round("", 34, () => _ = _media.PlayPauseAsync(), "Play or pause", light: true);
+        var next = UI.Round("", 30, () => _ = _media.NextAsync(), "Next");
+        back.Margin = new Thickness(0, 0, 8, 0);
+        _popPlay.Margin = new Thickness(0, 0, 8, 0);
+        next.Margin = new Thickness(0);
+        _popControls.Children.Add(back);
+        _popControls.Children.Add(_popPlay);
+        _popControls.Children.Add(next);
+        Grid.SetColumn(_popControls, 2);
+        _pop.Children.Add(_popControls);
+        // With song buttons the pop-up takes the mouse itself; a click anywhere else on it still opens it.
+        _pop.Background = Brushes.Transparent;
+        _pop.MouseLeftButtonUp += (_, e) =>
+        {
+            if (!_inPop) return;
+            e.Handled = true;
+            var open = _popClick;
+            EndPop();
+            open?.Invoke();
+        };
         _pop.Opacity = 0;
         _canvas.Children.Add(_pop);
 
@@ -275,14 +302,17 @@ public sealed class NotchWindow : Window
     });
 
     /// <summary>Grows the notch wide to show a notification for a few seconds. Resting the mouse on it keeps it; clicking opens it.</summary>
-    void ShowPop(ImageSource? icon, bool round, string title, string body, Action click, double? seconds = null)
+    void ShowPop(ImageSource? icon, bool round, string title, string body, Action click, double? seconds = null, bool song = false)
     {
         // Not over a game or with Do Not Disturb on, and not while Home is open.
         if (!_style.Popups || !IsVisible || _expanded || GameMode.Active || DoNotDisturb.IsOn) return;
         // With a notch on every screen, only the one where you are pops up.
         if (_open > 1 && WindowManagement.ZoneManager.ScreenAtCursor().HMonitor != Screen.HMonitor) return;
+        _songPop = song;
+        _popControls.Visibility = song ? Visibility.Visible : Visibility.Collapsed;
+        _pop.IsHitTestVisible = song;
         _popIcon.Source = icon;
-        _popIcon.Clip = round ? new EllipseGeometry(new Point(18, 18), 18, 18) : null;
+        _popIcon.Clip = round ? new EllipseGeometry(new Point(18, 18), 18, 18) : song ? new RectangleGeometry(new Rect(0, 0, 36, 36), 8, 8) : null;
         _popIcon.Visibility = icon != null ? Visibility.Visible : Visibility.Collapsed;
         _popBell.Visibility = icon == null ? Visibility.Visible : Visibility.Collapsed;
         _popTitle.Text = title.ReplaceLineEndings(" ");
@@ -313,6 +343,8 @@ public sealed class NotchWindow : Window
     void EndPop(bool animate = true)
     {
         _popTimer?.Stop();
+        _pop.IsHitTestVisible = false;
+        _songPop = false;
         if (!_inPop) return;
         _inPop = false;
         if (!animate)
@@ -646,7 +678,43 @@ public sealed class NotchWindow : Window
         var now = await _media.GetAsync();
         _musicPlaying = now?.IsPlaying == true;
         UpdateSide();
+        SongChanged(now);
     });
+
+    /// <summary>A new song starts playing: pop out of the notch with it and back / play-pause / next.</summary>
+    void SongChanged(NowPlaying? now)
+    {
+        var key = now == null ? null : $"{now.Title}\n{now.Artist}";
+        if (_songPop)
+        {
+            if (_popPlay != null) ((TextBlock)((Border)_popPlay.Content).Child).Text = now?.IsPlaying == true ? "" : "";
+            // Players often send the song's picture a moment after its name.
+            if (key == _songKey && now?.Art != null && _popIcon.Source == null)
+            {
+                _popIcon.Source = now.Art;
+                _popIcon.Visibility = Visibility.Visible;
+                _popBell.Visibility = Visibility.Collapsed;
+            }
+        }
+        if (!_songKnown)
+        {
+            _songKnown = true; // whatever was playing when DeskShell started isn't news
+            _songKey = key;
+            return;
+        }
+        // Between songs players briefly report "paused"; wait for the new one to actually play.
+        if (now == null || key == _songKey || !now.IsPlaying) return;
+        _songKey = key;
+        if (!_style.SongPopups) return;
+        ShowPop(now.Art, false, now.Title, now.Artist, OpenMusic, song: true);
+        if (_songPop && _popPlay != null) ((TextBlock)((Border)_popPlay.Content).Child).Text = "";
+    }
+
+    void OpenMusic()
+    {
+        Expand();
+        ShowTab("media");
+    }
 
     // ---------- the open panel ----------
 
